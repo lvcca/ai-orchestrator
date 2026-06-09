@@ -1,9 +1,9 @@
-# AI-Agents Framework
+# ai-orchestrator
 =====================================
 
 ## Overview
 
-AI-Agents is a lightweight, modular, and highly customizable AI agent framework built in Python. It provides a simple and intuitive API for creating intelligent agents that can interact with their environment and make decisions based on inputs.
+ai-orchestrator is a light ai-orchestrator written in typescript.
 
 ## Installation
 
