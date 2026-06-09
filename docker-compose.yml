@@ -24,8 +24,8 @@ services:
   # -----------------------------
   # ORCHESTRATOR (AI BRAIN)
   # -----------------------------
-  orchestrator:
-    build: ../orchestrator
+  ai-orchestrator:
+    build: ../ai-orchestrator
     container_name: ai-orchestrator
     depends_on:
       - ollama
@@ -36,7 +36,7 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       REDIS_URL: redis://redis:6379
     volumes:
-      - ../orchestrator:/app
+      - ../ai-orchestrator:/app
     working_dir: /app
     restart: unless-stopped
     gpus: all

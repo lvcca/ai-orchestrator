@@ -12,6 +12,6 @@
     "rewriteRelativeImportExtensions": true,
     "preserveConstEnums": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "*.md"],
   "exclude": ["node_modules", "dist",]
 }
