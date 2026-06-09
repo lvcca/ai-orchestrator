@@ -7,7 +7,7 @@ ai-orchestrator is a light ai-orchestrator written in typescript.
 
 ## Installation
 
-To install the AI-Agents framework, simply run the following command in your terminal:
+To install simply run the following command in your terminal:
 
 ```bash
 git checkout git@github.com:lvcca/ai-agents.git; 
@@ -42,7 +42,7 @@ curl -X GET "http://localhost:8080/task/newTask" \
 
 ## Contributing
 
-We welcome contributions from developers and users. If you'd like to contribute to the AI-Agents project, please submit a pull request with your changes.
+We welcome contributions from developers and users. If you'd like to contribute to the ai-orchestrator project, please submit a pull request with your changes.
 
 ## License
 
