@@ -20,11 +20,13 @@ docker compose up --build --force-recreate;
 
 ```typescript
 fetch("http://localhost:8080/task/newTask", {
-|     method: "GET",
-|     headers: {
-|         "Content-Type": "application/json", "task": "How should I go about starting a business?", "id": crypto.randomUUID()
-|     }
-| })
+  method: "GET",
+  headers: { 
+    "Content-Type": "application/json", 
+    "task": "How should I go about starting a business?", 
+    "id": crypto.randomUUID()
+  }
+})
 ```
 
 ```shell
