@@ -10,9 +10,9 @@ ai-orchestrator is a light ai-orchestrator written in typescript.
 To install simply run the following command in your terminal:
 
 ```bash
-git checkout git@github.com:lvcca/ai-agents.git; 
-# from project root
-docker compose down; 
+git checkout git@github.com:lvcca/ai-orchestrator.git;
+cd ai-orchestrator;
+docker compose down;
 docker compose up --build --force-recreate;
 ```
 
