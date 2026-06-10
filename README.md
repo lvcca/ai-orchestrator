@@ -10,7 +10,7 @@ A light ai-orchestrator written in Typescript.
 To install simply run the following command in your terminal:
 
 ```bash
-git checkout git@github.com:lvcca/ai-orchestrator.git;
+git clone git@github.com:lvcca/ai-orchestrator.git;
 cd ai-orchestrator;
 docker compose down;
 docker compose up --build --force-recreate;
