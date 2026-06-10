@@ -5,7 +5,7 @@ import { getHeader, taskInsert } from './api_util.ts';
 import { TaskType } from '../state/types.ts';
 import { getExec, getTask } from '../state/util.ts';
 import { redisGet, redisGetAll } from '../state/state.ts';
-import { RunAgents } from '../worker/TaskWorker.ts';
+import { RunTaskAgent } from '../worker/TaskWorker.ts';
 
 // all incoming traffic
 app.use((req, res, next) => {
@@ -50,7 +50,7 @@ const taskStart = async (id: string) => {
 
 	const taskDirect = obj.type === TaskType.TASK_DIRECT;
 
-	const result = await RunAgents(id, user_req.join(','), taskDirect);
+	const result = await RunTaskAgent(id, user_req.join(','), taskDirect);
 
 	logger.info(result);
 

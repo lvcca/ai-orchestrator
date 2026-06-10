@@ -9,6 +9,7 @@ const LLM_MODEL = {
 	GRANITE_4: 'granite4.1:3b',
 };
 export type LLM_MODEL = (typeof LLM_MODEL)[keyof typeof LLM_MODEL];
+export type OLLAMA_RES = { response: string };
 
 const OLLAMA_URL = _env.ollama_url;
 
@@ -35,7 +36,6 @@ export const call_LLM = async (prompt: string, model: LLM_MODEL = LLM_MODEL.LLAM
 			throw new Error(`response unsuccessful: ${response.status}, errorText: ${errorText}`);
 		}
 
-		type OLLAMA_RES = { response: string };
 		const _response = (await response.json()) as OLLAMA_RES;
 
 		return _response.response;

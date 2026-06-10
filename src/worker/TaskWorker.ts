@@ -99,7 +99,7 @@ ${{
 	}
 };
 
-export const RunAgents = async (task_id: string, task: string, LLM_DIRECT: boolean) => {
+export const RunTaskAgent = async (task_id: string, task: string, LLM_DIRECT: boolean) => {
 	await setTask({ id: task_id, status: Status.STARTED });
 	let final_output = '';
 	let plan = '';
