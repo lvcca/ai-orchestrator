@@ -1,7 +1,7 @@
-import { call_LLM, call_llm_chat, call_llm_tasks } from "../llm.ts"
+import { call_llm_chat, call_llm_tasks } from "../llm.ts"
 import logger from "../logger/logger.ts"
-import { Status, TaskType } from "../state/types.ts"
-import { getTask, setTask } from "../state/util.ts"
+import { Status } from "../state/types.ts"
+import { setTask } from "../state/util.ts"
 import { updatePrompt } from "./util.ts";
 
 function parseJsonSafe(text: string): any | null {

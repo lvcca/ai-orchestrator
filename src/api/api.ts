@@ -59,6 +59,7 @@ const taskStart = async (id: string) => {
     if (!user_req || user_req.length < 1) throw new Error(`no user req found for task ${id}`)
     
     const taskDirect = obj.type === TaskType.TASK_DIRECT
+    
     const result = await RunAgents(id, user_req.join(','), taskDirect)
     
     logger.info(result);
