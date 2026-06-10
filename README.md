@@ -3,7 +3,7 @@
 
 ## Overview
 
-ai-orchestrator is a light ai-orchestrator written in typescript.
+A light ai-orchestrator written in Typescript.
 
 ## Installation
 
