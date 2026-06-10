@@ -11,8 +11,7 @@ export const Status = {
 	HALTED: 3,
 } as const;
 
-export type Status =
-	(typeof Status)[keyof typeof Status];
+export type Status = (typeof Status)[keyof typeof Status];
 
 export type _Status = {
 	status: Status;
@@ -26,8 +25,7 @@ export const TaskType = {
 	JOB: 2,
 } as const;
 
-export type TaskType =
-	(typeof TaskType)[keyof typeof TaskType];
+export type TaskType = (typeof TaskType)[keyof typeof TaskType];
 
 export type Transaction = {
 	id: string;

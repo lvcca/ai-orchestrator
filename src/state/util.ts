@@ -1,57 +1,53 @@
-import {
-	redisGet,
-	redisSet,
-} from './state.ts';
-import {
-	Transaction,
-	TaskType,
-} from './types.ts';
+import { redisGet, redisSet } from './state.ts';
+import { Transaction, TaskType } from './types.ts';
 import logger from '../logger/logger.ts';
 
-export const setTask = async (
-	obj: Transaction,
-) => {
+export const setTask = async (tx: Transaction) => {
 	if (
-		obj.type !== undefined &&
-		obj.type !== TaskType.TASK &&
-		obj.type !== TaskType.TASK_DIRECT
+		tx.type !== undefined &&
+		tx.type !== TaskType.TASK &&
+		tx.type !== TaskType.TASK_DIRECT
 	)
 		throw new Error(
-			`task type mismatch: requested: ${obj.type}, expected ${TaskType.TASK} || ${TaskType.TASK_DIRECT}`,
+			`task type mismatch: requested: ${tx.type}, expected ${TaskType.TASK} || ${TaskType.TASK_DIRECT}`,
 		);
 
-	const successful = await redisSet(obj);
-	logger.info(
-		`setTask: successful ${successful}`,
-	);
+	const successful = await redisSet(tx);
+	logger.info(`setTask: successful ${successful}`);
 	return successful;
 };
 
+type TransactionChild = {
+	related?: {
+		task_id?: string;
+		exec_id?: string;
+		job_id?: string;
+	};
+};
+
 export const setExec = async (
-	obj: Transaction,
+	tx: Transaction & TransactionChild & { exec?: string },
 ) => {
-	if (obj.type !== TaskType.EXECUTION)
+	if (tx.type !== TaskType.EXECUTION)
 		throw new Error(
-			`task type mismatch: requested: ${obj.type}, expected ${TaskType.EXECUTION}`,
+			`task type mismatch: requested: ${tx.type}, expected ${TaskType.EXECUTION}`,
 		);
-	const successful = await redisSet(obj);
+	const successful = await redisSet(tx);
 	return successful;
 };
 
 export const setJob = async (
-	obj: Transaction,
+	tx: Transaction & TransactionChild & { job?: string },
 ) => {
-	if (obj.type !== TaskType.JOB)
+	if (tx.type !== TaskType.JOB)
 		throw new Error(
-			`task type mismatch: requested: ${obj.type}, expected ${TaskType.JOB}`,
+			`task type mismatch: requested: ${tx.type}, expected ${TaskType.JOB}`,
 		);
-	const successful = await redisSet(obj);
+	const successful = await redisSet(tx);
 	return successful;
 };
 
-export const getTask = async (
-	id: string,
-) => {
+export const getTask = async (id: string) => {
 	const entry = await redisGet(id);
 	if (
 		entry &&
@@ -64,14 +60,9 @@ export const getTask = async (
 	return entry;
 };
 
-export const getExec = async (
-	id: string,
-) => {
+export const getExec = async (id: string) => {
 	const entry = await redisGet(id);
-	if (
-		entry &&
-		entry?.type !== TaskType.EXECUTION
-	)
+	if (entry && entry?.type !== TaskType.EXECUTION)
 		throw new Error(
 			`task type mismatch: requested ${TaskType.EXECUTION} received: ${entry?.type}`,
 		);
