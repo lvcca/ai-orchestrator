@@ -1,47 +1,45 @@
-import { call_llm_chat, call_llm_tasks } from "../llm.ts"
-import logger from "../logger/logger.ts"
-import { Status } from "../state/types.ts"
-import { setTask } from "../state/util.ts"
-import { updatePrompt } from "./util.ts";
+import { call_llm_chat, call_llm_tasks } from '../llm.ts';
+import logger from '../logger/logger.ts';
+import { Status } from '../state/types.ts';
+import { setTask } from '../state/util.ts';
+import { updatePrompt } from './util.ts';
 
 function parseJsonSafe(text: string): any | null {
-    try {
-        console.info(`parseJsonSafe text: ${text}`);
-        return JSON.parse(text);
-    } catch {
-        return null;
-    }
+	try {
+		console.info(`parseJsonSafe text: ${text}`);
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
 }
 
 function extractResponseBlock(text: string): string | null {
-    const pattern = /<LLM_RESPONSE>([\s\S]*?)<\/LLM_RESPONSE>/;
+	const pattern = /<LLM_RESPONSE>([\s\S]*?)<\/LLM_RESPONSE>/;
 
-    const match = text.match(pattern);
+	const match = text.match(pattern);
 
-    if (match) {
-        return match[1].trim();
-    }
+	if (match) {
+		return match[1].trim();
+	}
 
-    return null;
+	return null;
 }
 
-const revise_plan = async (task_id: string, task: string, plan: string, depth=5) => {
+const revise_plan = async (task_id: string, task: string, plan: string, depth = 5) => {
+	if (depth == 0) {
+		return {
+			approved: false,
+			steps: plan,
+			revise_plan: false,
+		};
+	}
 
-    if (depth == 0) {
-        return {
-            "approved": false,
-            "steps": plan,
-            "revise_plan": false,
-        }
-    }
+	logger.info(`current task: ${task}`);
+	logger.info(`current plan: ${plan}`);
 
-    
-    logger.info(`current task: ${task}`)
-    logger.info(`current plan: ${plan}`)
+	await updatePrompt(task_id, Status.STARTED, task, plan);
 
-    await updatePrompt(task_id, Status.STARTED, task, plan)
-
-    let prompt = `You are a planning critic. You only have ${depth} number of attempts left to get this right.
+	const prompt = `You are a planning critic. You only have ${depth} number of attempts left to get this right.
 
 TASK:
 ${task}  
@@ -58,65 +56,59 @@ If 'revise_plan' is Truthy:
     Always remove the revise_plan flag from the output.
 
 If acceptable return the following data-structure:
-${
-    JSON.stringify(
-        {
-            approved: Boolean,
-            steps: [], // <-- populated with real steps
-            revise_plan: Boolean,
-            plan_feedback: [], //<-- populated with problems with previous steps
-        }
-    )
-}
+${JSON.stringify({
+	approved: Boolean,
+	steps: [], // <-- populated with real steps
+	revise_plan: Boolean,
+	plan_feedback: [], //<-- populated with problems with previous steps
+})}
 
 If not acceptable return the following data-structure:
 ${{
-  approved: false,
-  steps: [], // <-- populated with real steps
-  revise_plan: true,
-  plan_feedback: [], //<-- populated with problems with previous steps
+	approved: false,
+	steps: [], // <-- populated with real steps
+	revise_plan: true,
+	plan_feedback: [], //<-- populated with problems with previous steps
 }}
-`
-    
-    logger.info(`prompt: ${prompt}`)
+`;
 
-    let raw = await call_llm_tasks(prompt)
+	logger.info(`prompt: ${prompt}`);
 
-    if (!raw) throw new Error('no response from llm...')
-    
-    logger.info(`response: ${raw}`)
+	const raw = await call_llm_tasks(prompt);
 
-    let result = parseJsonSafe(raw)
+	if (!raw) throw new Error('no response from llm...');
 
-    if (!result) return revise_plan(task_id, task, plan, depth - 1)
+	logger.info(`response: ${raw}`);
 
-    if (result.approved) return result
+	const result = parseJsonSafe(raw);
 
-    // if not approved
-    else {
-        let new_plan = result["steps"] ?? plan
-        let plan_feedback = JSON.stringify(result["plan_feedback"])
-        let _new_plan = new_plan
+	if (!result) return revise_plan(task_id, task, plan, depth - 1);
 
-        // combine 
-        if (plan_feedback) _new_plan = `${new_plan}\n\nThe previous plan did not accomplish the following: ${JSON.stringify(plan_feedback)}\n\n`
+	if (result.approved) return result;
+	// if not approved
+	else {
+		const new_plan = result['steps'] ?? plan;
+		const plan_feedback = JSON.stringify(result['plan_feedback']);
+		let _new_plan = new_plan;
 
-        return revise_plan(task_id, task, _new_plan, depth - 1)
-    }
+		// combine
+		if (plan_feedback)
+			_new_plan = `${new_plan}\n\nThe previous plan did not accomplish the following: ${JSON.stringify(plan_feedback)}\n\n`;
 
-}
+		return revise_plan(task_id, task, _new_plan, depth - 1);
+	}
+};
 
 export const RunAgents = async (task_id: string, task: string, LLM_DIRECT: boolean) => {
+	await setTask({ id: task_id, status: Status.STARTED });
+	let final_output = '';
+	let plan = '';
+	let revised_plan = '';
 
-    await setTask({id: task_id, status: Status.STARTED})
-    let final_output = "";
-    let plan = "";
-    let revised_plan = "";
-    
-    try {
-        if (LLM_DIRECT) final_output = await call_llm_chat(`${task}`) 
+	try {
+		if (LLM_DIRECT) final_output = await call_llm_chat(`${task}`);
 
-        plan = await call_llm_tasks(`
+		plan = await call_llm_tasks(`
 You are a planning agent.
 
 Your job is to decompose tasks into concise executable steps.
@@ -138,11 +130,11 @@ OUTPUT FORMAT:
 
 TASK:
 ${task}
-`)
-            
-        revised_plan = await revise_plan(task_id, task, plan)
+`);
 
-        final_output = await call_llm_tasks(`
+		revised_plan = await revise_plan(task_id, task, plan);
+
+		final_output = await call_llm_tasks(`
 You are an execution agent.
 
 Your job is to complete the requested task using the provided plan.
@@ -160,16 +152,15 @@ RULES:
 - Return only the completed result
 
 EXECUTION:
-                `)
-        
-        await updatePrompt(task_id, Status.COMPLETED, task, plan)
+                `);
 
-    } catch (e) {
-        logger.error(`something went wrong in TaskWorker:run_agents: ${e}`)
-        await updatePrompt(task_id, Status.FAILED, task, plan)
-    }
+		await updatePrompt(task_id, Status.COMPLETED, task, plan);
+	} catch (e) {
+		logger.error(`something went wrong in TaskWorker:run_agents: ${e}`);
+		await updatePrompt(task_id, Status.FAILED, task, plan);
+	}
 
-    await setTask({id: task_id, status: Status.COMPLETED, result: final_output})
+	await setTask({ id: task_id, status: Status.COMPLETED, result: final_output });
 
-    return final_output
-}
+	return final_output;
+};

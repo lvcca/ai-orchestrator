@@ -6,7 +6,10 @@
   "scripts": {
     "build": "tsc",
     "start": "npx tsx src/main.ts",
-    "dev": "nodemon dist/main.js"
+    "dev": "nodemon dist/main.js",
+    "lint": "eslint src/",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "pipeline": "npm run format && npm run build"
   },
   "keywords": [],
   "author": "",
@@ -16,15 +19,20 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "nodemon": "^3.1.14",
+    "npm-run": "^5.0.1",
     "redis": "^6.0.0",
-    "winston": "3.19.0",
     "typescript": "^6.0.3",
-    "npm-run": "^5.0.1"
+    "winston": "3.19.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "jiti": "^2.7.0",
+    "prettier": "^3.8.4",
     "ts-node": "^10.9.2",
-    "tsx": "^4.22.4"
+    "tsx": "^4.22.4",
+    "typescript-eslint": "^8.61.0"
   }
 }

@@ -5,53 +5,51 @@ import { redisExists } from '../state/state.ts';
 import { setExec, setJob, setTask } from '../state/util.ts';
 
 export const getHeader = (req: Request, header: string) => {
-    const _header = req.headers[header];
-    
-    if (!_header || typeof _header !== 'string') throw new Error('no valid id')
-        
-    else return _header
-}
+	const _header = req.headers[header];
+
+	if (!_header || typeof _header !== 'string') throw new Error('no valid id');
+	else return _header;
+};
 
 export const taskInsert = async (req: Request, type: TaskType) => {
-    logger.info(`in task insert`)
+	logger.info(`in task insert`);
 
-    let successful: boolean = false
-    const id = getHeader(req, 'id') ?? crypto.randomUUID()
-    const task = getHeader(req, 'task')
-    const exists = await redisExists(id)
-    
-    logger.info(`exists: ${exists}`)
+	let successful: boolean = false;
 
-    if (!exists) {
+	const id = getHeader(req, 'id') ?? crypto.randomUUID();
+	const task = getHeader(req, 'task');
+	const exists = await redisExists(id);
 
-        const obj: RedisObject = {
-            id,
-            status: Status.QUEUED,
-            type: TaskType.TASK,
-            prompt: {
-                req: [task],
-                res: []
-            }
-        }
+	logger.info(`exists: ${exists}`);
 
-        logger.info(`Incoming newTask: ${id}, type: ${type}`)
+	if (!exists) {
+		const obj: RedisObject = {
+			id,
+			status: Status.QUEUED,
+			type: TaskType.TASK,
+			prompt: {
+				req: [task],
+				res: [],
+			},
+		};
 
-        switch(type) {
+		logger.info(`Incoming newTask: ${id}, type: ${type}`);
 
-            case TaskType.EXECUTION:
-                successful = await setExec(obj)
-                break;
-            case TaskType.JOB:
-                successful = await setJob(obj)
-                break;
-            case TaskType.TASK_DIRECT:
-            case TaskType.TASK:
-                successful = await setTask(obj)
-                break;
-        }
+		switch (type) {
+			case TaskType.EXECUTION:
+				successful = await setExec(obj);
+				break;
+			case TaskType.JOB:
+				successful = await setJob(obj);
+				break;
+			case TaskType.TASK_DIRECT:
+			case TaskType.TASK:
+				successful = await setTask(obj);
+				break;
+		}
 
-        logger.info(`successful: ${successful}`)
-    }
+		logger.info(`successful: ${successful}`);
+	}
 
-    return id
-}
+	return id;
+};
