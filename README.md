@@ -11,7 +11,9 @@ To install simply run the following command in your terminal:
 
 ```bash
 git clone git@github.com:lvcca/ai-orchestrator.git;
+
 cd ai-orchestrator;
+
 docker compose down;
 docker compose up --build --force-recreate;
 ```
@@ -33,7 +35,7 @@ fetch("http://localhost:8080/task/newTask", {
 curl -X GET "http://localhost:8080/task/newTask" \
   -H "Content-Type: application/json" \
   -H "task: How should I go about starting a business?" \
-  -H "id: 550e8400-e29b-41d4-a716-446655440000"
+  -H "id: 550e8400-e29b-41d4-a716-446655440000" 
 ```
 
 ### Output
@@ -48,7 +50,7 @@ We welcome contributions from developers and users. If you'd like to contribute 
 
 ## License
 
-AI-Agents is released under the [MIT License](https://opensource.org/licenses/MIT).
+ai-orchestrator is released under the [MIT License](https://opensource.org/licenses/MIT).
 
 ## Issues
 

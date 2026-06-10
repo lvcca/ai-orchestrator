@@ -12,7 +12,7 @@
     "pipeline": "npm run format && npm run build"
   },
   "keywords": [],
-  "author": "",
+  "author": "Mason L. Palma",
   "license": "ISC",
   "type": "module",
   "dependencies": {
