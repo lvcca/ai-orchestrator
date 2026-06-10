@@ -1,22 +1,42 @@
 import type { Request } from 'express';
-import { type RedisObject, Status, TaskType } from '../state/types.ts';
+import {
+	type RedisObject,
+	Status,
+	TaskType,
+} from '../state/types.ts';
 import logger from '../logger/logger.ts';
 import { redisExists } from '../state/state.ts';
-import { setExec, setJob, setTask } from '../state/util.ts';
+import {
+	setExec,
+	setJob,
+	setTask,
+} from '../state/util.ts';
 
-export const getHeader = (req: Request, header: string) => {
+export const getHeader = (
+	req: Request,
+	header: string,
+) => {
 	const _header = req.headers[header];
 
-	if (!_header || typeof _header !== 'string') throw new Error('no valid id');
+	if (
+		!_header ||
+		typeof _header !== 'string'
+	)
+		throw new Error('no valid id');
 	else return _header;
 };
 
-export const taskInsert = async (req: Request, type: TaskType) => {
+export const taskInsert = async (
+	req: Request,
+	type: TaskType,
+) => {
 	logger.info(`in task insert`);
 
 	let successful: boolean = false;
 
-	const id = getHeader(req, 'id') ?? crypto.randomUUID();
+	const id =
+		getHeader(req, 'id') ??
+		crypto.randomUUID();
 	const task = getHeader(req, 'task');
 	const exists = await redisExists(id);
 
@@ -25,7 +45,9 @@ export const taskInsert = async (req: Request, type: TaskType) => {
 	if (!exists) {
 		const obj: RedisObject = {
 			id,
-			status: Status.QUEUED,
+			status: {
+				status: Status.QUEUED,
+			},
 			type: TaskType.TASK,
 			prompt: {
 				req: [task],
@@ -33,7 +55,9 @@ export const taskInsert = async (req: Request, type: TaskType) => {
 			},
 		};
 
-		logger.info(`Incoming newTask: ${id}, type: ${type}`);
+		logger.info(
+			`Incoming newTask: ${id}, type: ${type}`,
+		);
 
 		switch (type) {
 			case TaskType.EXECUTION:

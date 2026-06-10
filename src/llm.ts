@@ -8,173 +8,296 @@ const LLM_MODEL = {
 	QWEN3_CODER: 'qwen3-coder:30b',
 	GRANITE_4: 'granite4.1:3b',
 };
-export type LLM_MODEL = (typeof LLM_MODEL)[keyof typeof LLM_MODEL];
-export type OLLAMA_RES = { response: string };
+export type LLM_MODEL =
+	(typeof LLM_MODEL)[keyof typeof LLM_MODEL];
+export type OLLAMA_RES = {
+	response: string;
+};
 
 const OLLAMA_URL = _env.ollama_url;
 
-export const call_LLM = async (prompt: string, model: LLM_MODEL = LLM_MODEL.LLAMA_3_1) => {
+export const call_LLM = async (
+	prompt: string,
+	model: LLM_MODEL = LLM_MODEL.QWEN3_CODER,
+) => {
 	try {
 		logger.info(`calling llm ${prompt}`);
 
 		const karpathy_guidelines = `${PROMPTS['karpathy_guidelines']} + '\n'`;
 
-		const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-			body: JSON.stringify({
-				model,
-				prompt: `${karpathy_guidelines} ${prompt}`,
-				stream: false,
-			}),
-			headers: {
-				'Content-Type': 'application/json',
+		const response = await fetch(
+			`${OLLAMA_URL}/api/generate`,
+			{
+				body: JSON.stringify({
+					model,
+					prompt: `${karpathy_guidelines} ${prompt}`,
+					stream: false,
+				}),
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				method: 'POST',
 			},
-			method: 'POST',
-		});
+		);
 
 		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`response unsuccessful: ${response.status}, errorText: ${errorText}`);
+			const errorText =
+				await response.text();
+			throw new Error(
+				`response unsuccessful: ${response.status}, errorText: ${errorText}`,
+			);
 		}
 
-		const _response = (await response.json()) as OLLAMA_RES;
+		const _response =
+			(await response.json()) as OLLAMA_RES;
 
 		return _response.response;
 	} catch (e) {
-		logger.error(`something went wrong in call_llm: ${JSON.stringify(e)}`);
+		logger.error(
+			`something went wrong in call_llm: ${JSON.stringify(e)}`,
+		);
 	}
 };
 
-const load_context = async (prompts_md_file: string) => {
-	let PROMPTS_CONTENT = '\n\n-----BEGIN CONTEXT-----\n\n';
-	const CONTEXT_END = '\n\n-----END CONTEXT-----\n\n';
+const load_context = async (
+	prompts_md_file: string,
+) => {
+	let PROMPTS_CONTENT =
+		'\n\n-----BEGIN CONTEXT-----\n\n';
+	const CONTEXT_END =
+		'\n\n-----END CONTEXT-----\n\n';
 
-	logger.info(`prompts_md_file: ${prompts_md_file}`);
+	logger.info(
+		`prompts_md_file: ${prompts_md_file}`,
+	);
 
 	try {
 		// const currentDir = import.meta?.dirname ?? __dirname ?? "/app/dist/";
 
 		const currentDir = '/app/dist/';
 
-		const filePath = path.join(currentDir, prompts_md_file);
+		const filePath = path.join(
+			currentDir,
+			prompts_md_file,
+		);
 
-		const file_string = await readFile(filePath, 'utf8');
+		const file_string = await readFile(
+			filePath,
+			'utf8',
+		);
 
-		logger.info(`file_string: ${file_string}`);
+		logger.info(
+			`file_string: ${file_string}`,
+		);
 
 		PROMPTS_CONTENT += file_string;
 
 		PROMPTS_CONTENT += CONTEXT_END;
 	} catch (e) {
-		logger.error(`something went wrong in load_context ${e}`);
+		logger.error(
+			`something went wrong in load_context ${e}`,
+		);
 	}
 
 	return PROMPTS_CONTENT;
 };
 
 // prompts
-const CODING_TASKS_PROMPTS_FILE = './prompts/coding_tasks_prompts.md';
-const EXECUTION_PROMPTS_FILE = './prompts/execution_prompts.md';
-const CHAT_PROMPTS_FILE = './prompts/chat_prompts.md';
-const TOOL_NARROWER_PROMPTS_FILE = './prompts/tool_narrower.md';
-const SHELL_EXECUTOR_PROMPTS_FILE = './prompts/shell_executor_prompts.md';
-const SHELL_EXECUTOR_BRANCH_PROMPTS_FILE = './prompts/shell_executor_branch_prompts.md';
+const CODING_TASKS_PROMPTS_FILE =
+	'./prompts/coding_tasks_prompts.md';
+const EXECUTION_PROMPTS_FILE =
+	'./prompts/execution_prompts.md';
+const CHAT_PROMPTS_FILE =
+	'./prompts/chat_prompts.md';
+const TOOL_NARROWER_PROMPTS_FILE =
+	'./prompts/tool_narrower.md';
+const SHELL_EXECUTOR_PROMPTS_FILE =
+	'./prompts/shell_executor_prompts.md';
+const SHELL_EXECUTOR_BRANCH_PROMPTS_FILE =
+	'./prompts/shell_executor_branch_prompts.md';
 const SHELL_EXECUTOR_BRANCH_SIMPLIFIER_PROMPTS_FILE =
 	'./prompts/shell_executor_branch_simplifier.md';
-const SHELL_RESULTS_ANALYZER_PROMPTS_FILE = './prompts/shell_results_analyzer_prompts.md';
-const KARPATHY_GUIDELINES_PROMPTS_FILE = './prompts/karpathy_guidelines_prompts.md';
+const SHELL_RESULTS_ANALYZER_PROMPTS_FILE =
+	'./prompts/shell_results_analyzer_prompts.md';
+const KARPATHY_GUIDELINES_PROMPTS_FILE =
+	'./prompts/karpathy_guidelines_prompts.md';
 
 // types
-const TOOL_API_TYPE_FILE = './prompts/types/ApiToolChain.ts';
-const SHELL_EXECUTOR_TYPE_FILE = './prompts/types/ShellExecutor.ts';
-const SHELL_BRANCH_ANALYSIS_TYPE_FILE = './prompts/types/ShellBranch.ts';
-const SHELL_RESULTS_TYPE_FILE = './prompts/types/ShellResults.ts';
+const TOOL_API_TYPE_FILE =
+	'./prompts/types/ApiToolChain.ts';
+const SHELL_EXECUTOR_TYPE_FILE =
+	'./prompts/types/ShellExecutor.ts';
+const SHELL_BRANCH_ANALYSIS_TYPE_FILE =
+	'./prompts/types/ShellBranch.ts';
+const SHELL_RESULTS_TYPE_FILE =
+	'./prompts/types/ShellResults.ts';
 
 export const PROMPTS = {
-	tasks: await load_context(CODING_TASKS_PROMPTS_FILE),
-	execution: await load_context(EXECUTION_PROMPTS_FILE),
-	chat: await load_context(CHAT_PROMPTS_FILE),
-	tool_narrower: await load_context(TOOL_NARROWER_PROMPTS_FILE),
-	// aux
-	tool_types: await load_context(TOOL_API_TYPE_FILE),
-	karpathy_guidelines: await load_context(KARPATHY_GUIDELINES_PROMPTS_FILE),
-	// shell executor stuffs
-	shell_executor: await load_context(SHELL_EXECUTOR_PROMPTS_FILE),
-	shell_executor_types: await load_context(SHELL_EXECUTOR_TYPE_FILE),
-	shell_executor_branch_analysis_types: await load_context(SHELL_BRANCH_ANALYSIS_TYPE_FILE),
-	shell_executor_branch_analyst: await load_context(SHELL_EXECUTOR_BRANCH_PROMPTS_FILE),
-	shell_executor_branch_simplifier: await load_context(
-		SHELL_EXECUTOR_BRANCH_SIMPLIFIER_PROMPTS_FILE,
+	tasks: await load_context(
+		CODING_TASKS_PROMPTS_FILE,
 	),
+	execution: await load_context(
+		EXECUTION_PROMPTS_FILE,
+	),
+	chat: await load_context(
+		CHAT_PROMPTS_FILE,
+	),
+	tool_narrower: await load_context(
+		TOOL_NARROWER_PROMPTS_FILE,
+	),
+	// aux
+	tool_types: await load_context(
+		TOOL_API_TYPE_FILE,
+	),
+	karpathy_guidelines: await load_context(
+		KARPATHY_GUIDELINES_PROMPTS_FILE,
+	),
+	// shell executor stuffs
+	shell_executor: await load_context(
+		SHELL_EXECUTOR_PROMPTS_FILE,
+	),
+	shell_executor_types: await load_context(
+		SHELL_EXECUTOR_TYPE_FILE,
+	),
+	shell_executor_branch_analysis_types:
+		await load_context(
+			SHELL_BRANCH_ANALYSIS_TYPE_FILE,
+		),
+	shell_executor_branch_analyst:
+		await load_context(
+			SHELL_EXECUTOR_BRANCH_PROMPTS_FILE,
+		),
+	shell_executor_branch_simplifier:
+		await load_context(
+			SHELL_EXECUTOR_BRANCH_SIMPLIFIER_PROMPTS_FILE,
+		),
 	// shell results
-	shell_results_analyzer: await load_context(SHELL_RESULTS_ANALYZER_PROMPTS_FILE),
-	shell_results_types: await load_context(SHELL_RESULTS_TYPE_FILE),
+	shell_results_analyzer: await load_context(
+		SHELL_RESULTS_ANALYZER_PROMPTS_FILE,
+	),
+	shell_results_types: await load_context(
+		SHELL_RESULTS_TYPE_FILE,
+	),
 } as const;
 
-export type PROMPTS = (typeof PROMPTS)[keyof typeof PROMPTS];
+export type PROMPTS =
+	(typeof PROMPTS)[keyof typeof PROMPTS];
 
-export const call_llm_chat = async (prompt: string) => {
-	const withContext = PROMPTS['chat'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
-
-	return res;
-};
-
-export const call_llm_tasks = async (prompt: string) => {
-	const withContext = PROMPTS['tasks'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
-
-	return res;
-};
-
-export const call_llm_toolchain = async (prompt: string) => {
-	const withContext = PROMPTS['execution'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
-
-	return res;
-};
-
-export const call_llm_data_narrower = async (prompt: string) => {
-	const withContext = PROMPTS['tool_narrower'] + PROMPTS['tool_types'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
-
-	return res;
-};
-
-export const call_llm_shell_executor = async (prompt: string) => {
-	const withContext = PROMPTS['shell_executor'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
-
-	return res;
-};
-
-export const call_llm_shell_results_analyzer = async (prompt: string) => {
-	const withContext = PROMPTS['shell_results_analyzer'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
-
-	return res;
-};
-
-export const call_llm_shell_branch_analyzer = async (prompt: string) => {
+export const call_llm_chat = async (
+	prompt: string,
+) => {
 	const withContext =
-		PROMPTS['shell_executor_branch_analyst'] +
-		PROMPTS['shell_executor_branch_analysis_types'] +
+		PROMPTS['chat'] + prompt;
+	const res = await call_LLM(withContext);
+	if (!res)
+		throw new Error(
+			`did not receive response from llm: ${res}`,
+		);
+
+	return res;
+};
+
+export const call_llm_tasks = async (
+	prompt: string,
+) => {
+	const withContext =
+		PROMPTS['tasks'] + prompt;
+	const res = await call_LLM(withContext);
+	if (!res)
+		throw new Error(
+			`did not receive response from llm: ${res}`,
+		);
+
+	return res;
+};
+
+export const call_llm_toolchain = async (
+	prompt: string,
+) => {
+	const withContext =
+		PROMPTS['execution'] + prompt;
+	const res = await call_LLM(withContext);
+	if (!res)
+		throw new Error(
+			`did not receive response from llm: ${res}`,
+		);
+
+	return res;
+};
+
+export const call_llm_data_narrower = async (
+	prompt: string,
+) => {
+	const withContext =
+		PROMPTS['tool_narrower'] +
+		PROMPTS['tool_types'] +
 		prompt;
 	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
+	if (!res)
+		throw new Error(
+			`did not receive response from llm: ${res}`,
+		);
 
 	return res;
 };
 
-export const call_llm_shell_branch_simplifier = async (prompt: string) => {
-	const withContext = PROMPTS['shell_executor_branch_analyst'] + prompt;
-	const res = await call_LLM(withContext);
-	if (!res) throw new Error(`did not receive response from llm: ${res}`);
+export const call_llm_shell_executor =
+	async (prompt: string) => {
+		const withContext =
+			PROMPTS['shell_executor'] + prompt;
+		const res = await call_LLM(withContext);
+		if (!res)
+			throw new Error(
+				`did not receive response from llm: ${res}`,
+			);
 
-	return res;
-};
+		return res;
+	};
+
+export const call_llm_shell_results_analyzer =
+	async (prompt: string) => {
+		const withContext =
+			PROMPTS['shell_results_analyzer'] +
+			prompt;
+		const res = await call_LLM(withContext);
+		if (!res)
+			throw new Error(
+				`did not receive response from llm: ${res}`,
+			);
+
+		return res;
+	};
+
+export const call_llm_shell_branch_analyzer =
+	async (prompt: string) => {
+		const withContext =
+			PROMPTS[
+				'shell_executor_branch_analyst'
+			] +
+			PROMPTS[
+				'shell_executor_branch_analysis_types'
+			] +
+			prompt;
+		const res = await call_LLM(withContext);
+		if (!res)
+			throw new Error(
+				`did not receive response from llm: ${res}`,
+			);
+
+		return res;
+	};
+
+export const call_llm_shell_branch_simplifier =
+	async (prompt: string) => {
+		const withContext =
+			PROMPTS[
+				'shell_executor_branch_analyst'
+			] + prompt;
+		const res = await call_LLM(withContext);
+		if (!res)
+			throw new Error(
+				`did not receive response from llm: ${res}`,
+			);
+
+		return res;
+	};

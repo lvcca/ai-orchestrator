@@ -1,20 +1,30 @@
-import { call_llm_chat, call_llm_tasks } from '../llm.ts';
+import {
+	call_llm_chat,
+	call_llm_tasks,
+} from '../llm.ts';
 import logger from '../logger/logger.ts';
 import { Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
 import { updatePrompt } from './util.ts';
 
-function parseJsonSafe(text: string): any | null {
+function parseJsonSafe(
+	text: string,
+): any | null {
 	try {
-		console.info(`parseJsonSafe text: ${text}`);
+		console.info(
+			`parseJsonSafe text: ${text}`,
+		);
 		return JSON.parse(text);
 	} catch {
 		return null;
 	}
 }
 
-function extractResponseBlock(text: string): string | null {
-	const pattern = /<LLM_RESPONSE>([\s\S]*?)<\/LLM_RESPONSE>/;
+function extractResponseBlock(
+	text: string,
+): string | null {
+	const pattern =
+		/<LLM_RESPONSE>([\s\S]*?)<\/LLM_RESPONSE>/;
 
 	const match = text.match(pattern);
 
@@ -25,7 +35,12 @@ function extractResponseBlock(text: string): string | null {
 	return null;
 }
 
-const revise_plan = async (task_id: string, task: string, plan: string, depth = 5) => {
+const revise_plan = async (
+	task_id: string,
+	task: string,
+	plan: string,
+	depth = 5,
+) => {
 	if (depth == 0) {
 		return {
 			approved: false,
@@ -37,7 +52,12 @@ const revise_plan = async (task_id: string, task: string, plan: string, depth = 
 	logger.info(`current task: ${task}`);
 	logger.info(`current plan: ${plan}`);
 
-	await updatePrompt(task_id, Status.STARTED, task, plan);
+	await updatePrompt(
+		task_id,
+		Status.RUNNING,
+		task,
+		plan,
+	);
 
 	const prompt = `You are a planning critic. You only have ${depth} number of attempts left to get this right.
 
@@ -76,37 +96,63 @@ ${{
 
 	const raw = await call_llm_tasks(prompt);
 
-	if (!raw) throw new Error('no response from llm...');
+	if (!raw)
+		throw new Error(
+			'no response from llm...',
+		);
 
 	logger.info(`response: ${raw}`);
 
 	const result = parseJsonSafe(raw);
 
-	if (!result) return revise_plan(task_id, task, plan, depth - 1);
+	if (!result)
+		return revise_plan(
+			task_id,
+			task,
+			plan,
+			depth - 1,
+		);
 
 	if (result.approved) return result;
 	// if not approved
 	else {
 		const new_plan = result['steps'] ?? plan;
-		const plan_feedback = JSON.stringify(result['plan_feedback']);
+		const plan_feedback = JSON.stringify(
+			result['plan_feedback'],
+		);
 		let _new_plan = new_plan;
 
 		// combine
 		if (plan_feedback)
 			_new_plan = `${new_plan}\n\nThe previous plan did not accomplish the following: ${JSON.stringify(plan_feedback)}\n\n`;
 
-		return revise_plan(task_id, task, _new_plan, depth - 1);
+		return revise_plan(
+			task_id,
+			task,
+			_new_plan,
+			depth - 1,
+		);
 	}
 };
 
-export const RunTaskAgent = async (task_id: string, task: string, LLM_DIRECT: boolean) => {
-	await setTask({ id: task_id, status: Status.STARTED });
+export const RunTask = async (
+	task_id: string,
+	task: string,
+	LLM_DIRECT: boolean,
+) => {
+	await setTask({
+		id: task_id,
+		status: { status: Status.RUNNING },
+	});
 	let final_output = '';
 	let plan = '';
 	let revised_plan = '';
 
 	try {
-		if (LLM_DIRECT) final_output = await call_llm_chat(`${task}`);
+		if (LLM_DIRECT)
+			final_output = await call_llm_chat(
+				`${task}`,
+			);
 
 		plan = await call_llm_tasks(`
 You are a planning agent.
@@ -132,7 +178,11 @@ TASK:
 ${task}
 `);
 
-		revised_plan = await revise_plan(task_id, task, plan);
+		revised_plan = await revise_plan(
+			task_id,
+			task,
+			plan,
+		);
 
 		final_output = await call_llm_tasks(`
 You are an execution agent.
@@ -154,13 +204,31 @@ RULES:
 EXECUTION:
                 `);
 
-		await updatePrompt(task_id, Status.COMPLETED, task, plan);
+		await updatePrompt(
+			task_id,
+			Status.COMPLETED,
+			task,
+			plan,
+		);
 	} catch (e) {
-		logger.error(`something went wrong in TaskWorker:run_agents: ${e}`);
-		await updatePrompt(task_id, Status.FAILED, task, plan);
+		logger.error(
+			`something went wrong in TaskWorker:run_agents: ${e}`,
+		);
+		await updatePrompt(
+			task_id,
+			Status.FAILED,
+			task,
+			plan,
+		);
 	}
 
-	await setTask({ id: task_id, status: Status.COMPLETED, result: final_output });
+	await setTask({
+		id: task_id,
+		status: {
+			status: Status.COMPLETED,
+		},
+		result: final_output,
+	});
 
 	return final_output;
 };

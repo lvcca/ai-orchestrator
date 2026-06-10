@@ -6,12 +6,18 @@ export type Prompt = {
 export const Status = {
 	FAILED: -1,
 	QUEUED: 0,
-	STARTED: 1,
+	RUNNING: 1,
 	COMPLETED: 2,
 	HALTED: 3,
 } as const;
 
-export type Status = (typeof Status)[keyof typeof Status];
+export type Status =
+	(typeof Status)[keyof typeof Status];
+
+export type _Status = {
+	status: Status;
+	message?: string;
+};
 
 export const TaskType = {
 	TASK_DIRECT: -1,
@@ -20,12 +26,13 @@ export const TaskType = {
 	JOB: 2,
 } as const;
 
-export type TaskType = (typeof TaskType)[keyof typeof TaskType];
+export type TaskType =
+	(typeof TaskType)[keyof typeof TaskType];
 
 export type RedisObject = {
 	id: string;
 	type?: TaskType;
-	status?: Status;
+	status?: _Status;
 	prompt?: Prompt;
 	result?: string; // final llm response
 };

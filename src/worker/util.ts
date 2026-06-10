@@ -1,5 +1,8 @@
 import { Status } from '../state/types.ts';
-import { getTask, setTask } from '../state/util.ts';
+import {
+	getTask,
+	setTask,
+} from '../state/util.ts';
 
 export const updatePrompt = async (
 	task_id: string,
@@ -9,15 +12,17 @@ export const updatePrompt = async (
 ) => {
 	const currentTask = await getTask(task_id);
 
-	const currentReq = currentTask?.prompt?.req ?? [];
-	const currentRes = currentTask?.prompt?.res ?? [];
+	const currentReq =
+		currentTask?.prompt?.req ?? [];
+	const currentRes =
+		currentTask?.prompt?.res ?? [];
 
 	if (task) currentReq.push(task);
 	if (plan) currentRes.push(plan);
 
 	await setTask({
 		id: task_id,
-		status: status,
+		status: { status },
 		prompt: {
 			req: currentReq,
 			res: currentRes,
