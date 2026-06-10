@@ -3,13 +3,13 @@ import {
 	redisSet,
 } from './state.ts';
 import {
-	RedisObject,
+	Transaction,
 	TaskType,
 } from './types.ts';
 import logger from '../logger/logger.ts';
 
 export const setTask = async (
-	obj: RedisObject,
+	obj: Transaction,
 ) => {
 	if (
 		obj.type !== undefined &&
@@ -28,7 +28,7 @@ export const setTask = async (
 };
 
 export const setExec = async (
-	obj: RedisObject,
+	obj: Transaction,
 ) => {
 	if (obj.type !== TaskType.EXECUTION)
 		throw new Error(
@@ -39,7 +39,7 @@ export const setExec = async (
 };
 
 export const setJob = async (
-	obj: RedisObject,
+	obj: Transaction,
 ) => {
 	if (obj.type !== TaskType.JOB)
 		throw new Error(

@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import {
-	type RedisObject,
+	type Transaction,
 	Status,
 	TaskType,
 } from '../state/types.ts';
@@ -43,7 +43,7 @@ export const taskInsert = async (
 	logger.info(`exists: ${exists}`);
 
 	if (!exists) {
-		const obj: RedisObject = {
+		const obj: Transaction = {
 			id,
 			status: {
 				status: Status.QUEUED,

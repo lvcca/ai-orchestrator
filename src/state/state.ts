@@ -4,7 +4,7 @@ import {
 	type RedisDefaultModules,
 } from 'redis';
 import logger from '../logger/logger.ts';
-import type { RedisObject } from './types.ts';
+import type { Transaction } from './types.ts';
 
 const client: RedisClientType = createClient(
 	{
@@ -45,7 +45,7 @@ export const getConnection = async () => {
 };
 
 export const redisSet = async (
-	obj: RedisObject,
+	obj: Transaction,
 ) => {
 	let successful = false;
 
@@ -126,7 +126,7 @@ export const redisGet = async (
 				`could not find entry with id: ${id}`,
 			);
 
-		const parsed: RedisObject =
+		const parsed: Transaction =
 			JSON.parse(obj);
 		return parsed;
 	} catch (e) {

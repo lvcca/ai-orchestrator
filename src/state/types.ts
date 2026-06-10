@@ -29,7 +29,7 @@ export const TaskType = {
 export type TaskType =
 	(typeof TaskType)[keyof typeof TaskType];
 
-export type RedisObject = {
+export type Transaction = {
 	id: string;
 	type?: TaskType;
 	status?: _Status;
