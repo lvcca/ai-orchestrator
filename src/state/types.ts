@@ -1,6 +1,8 @@
+import { ValidatorResponse } from "../prompts/types/TaskValidator.ts";
+
 export type Prompt = {
-	req?: string[];
-	res?: string[];
+	userRequest?: string[];
+	llmResponse?: string[];
 };
 
 export const Status = {
@@ -34,10 +36,11 @@ export type Related = {
 } | undefined
 
 export type Transaction = {
-	id: 		string;
-	type?: 		TaskType;
-	status?: 	_Status;
-	prompt?: 	Prompt;
-	related?: 	Related
-	result?: 	string; // final llm response
+	id: 				string;
+	type?: 				TaskType;
+	status?: 			_Status;
+	prompt?: 			Prompt;
+	related?: 			Related
+	result?: 			string; // final llm response
+	validatorResponse?: ValidatorResponse
 };

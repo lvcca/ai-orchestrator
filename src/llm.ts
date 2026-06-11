@@ -103,6 +103,9 @@ const SHELL_BRANCH_ANALYSIS_TYPE_FILE = './prompts/types/ShellBranch.ts';
 const SHELL_RESULTS_TYPE_FILE = './prompts/types/ShellResults.ts';
 const TASK_RESULTS_VALIDATOR_TYPES = './prompts/types/TaskValidator.ts';
 
+// schemas
+const FILE_SYSTEM_SCHEMA = './prompts/types/FileSystemSchema.ts';
+
 export const PROMPTS = {
 	tasks: await load_context(CODING_TASKS_PROMPTS_FILE),
 	execution: await load_context(EXECUTION_PROMPTS_FILE),
@@ -113,6 +116,8 @@ export const PROMPTS = {
 	// aux
 	tool_types: await load_context(TOOL_API_TYPE_FILE),
 	karpathy_guidelines: await load_context(KARPATHY_GUIDELINES_PROMPTS_FILE),
+	// schemas
+	file_system_schema: await load_context(FILE_SYSTEM_SCHEMA),
 	// shell executor stuffs
 	shell_executor: await load_context(SHELL_EXECUTOR_PROMPTS_FILE),
 	shell_executor_types: await load_context(SHELL_EXECUTOR_TYPE_FILE),

@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 import { type Transaction, Related, Status, TaskType } from '../state/types.ts';
 import {getLogger} from '../logger/logger.ts';
-import { redisExists, redisGet } from '../state/state.ts';
+import { redisExists, redisGet, redisSet } from '../state/state.ts';
 import { setExec, setJob, setTask } from '../state/util.ts';
 import crypto from 'node:crypto';
 import { call_llm_task_validator } from '../llm.ts';
@@ -38,8 +38,8 @@ export const taskInsert = async (req: Request, type: TaskType) => {
 			},
 			type: type,
 			prompt: {
-				req: [task],
-				res: [],
+				userRequest: [task],
+				llmResponse: [],
 			},
 		};
 
@@ -66,8 +66,6 @@ export const taskInsert = async (req: Request, type: TaskType) => {
 
 
 export const resolveRelated = async (related?: Related) => {
-	logger.info(`in resolveRelated`)
-
 	let tasks: Transaction 	[] = []
 	let execs: Transaction 	[] = []
 	let jobs: Transaction 	[] = []
@@ -113,51 +111,59 @@ export const validate = async (id?: string) => {
 	const res = entry.result;
 	const prompt = entry.prompt
 	const related = entry.related
+	const task = entry.prompt?.userRequest
+
 	let result: string;
 
 	logger.info(`res: ${res}, prompt: ${JSON.stringify(prompt)}`);
 	
 	result = await call_llm_task_validator(`
-	You are an Execution agent manager.
-	
-	Your job is to take results from a task and determine whether or not the task goal was accomplished.
-						
-	Task Result:
-	${JSON.stringify(res)}
-	
-	Related Tasks:
-	${JSON.stringify(await resolveRelated(related))}
+You are an Execution agent manager.
 
-	LLM Prompt History:
-	${JSON.stringify(prompt)}
-	
-	RULES:
-	- Use ONLY valid JSON as output 
-	- Always explain reasoning
-	- Do NOT include markdown
-	- There are at most 5 steps
-	- Steps are concrete and actionable
-	- Any text not in Javascript notation MUST be prepended with a comment
-	
-	ONLY ACCEPTABLE OUTPUT FORMAT:
-	<LLM_RESPONSE>
-		type ValidatorResponse = {
-			"valid": boolean,
-			"reason": string | null,
-			"confidence": number,
-			"issues": string[],
-			"evidence": string[]
-		}
-	</LLM_RESPONSE>`)
+Your job is to take results from a task and determine whether or not the task goal was accomplished.
+
+Initial Task(s):
+${JSON.stringify(task)}
+
+Task Result:
+${JSON.stringify(res)}
+
+Related Tasks:
+${JSON.stringify(await resolveRelated(related))}
+
+LLM Prompt History:
+${JSON.stringify(prompt)}
+
+RULES:
+- Use ONLY valid JSON as output 
+- Always explain reasoning
+- Do NOT include markdown
+- There are at most 5 steps
+- Steps are concrete and actionable
+- Any text not in Javascript notation MUST be prepended with a comment
+
+Output FORMAT:
+<LLM_RESPONSE>
+{
+		"valid": boolean,
+		"reason": string | null,
+		"confidence": number,
+		"issues": string[],
+		"evidence": string[]
+}
+</LLM_RESPONSE>
+	`)
 	
 	logger.debug(`Task Validator Result: ${result}`)
 
 	const responseBlock = extractResponseBlock(result)
-	if (!responseBlock) throw new Error('invalid response from validator')
+	if (!responseBlock) throw new Error(`invalid response from validator: ${responseBlock}`)
 
 	const safeObj = parseJsonSafe<ValidatorResponse>(responseBlock)
 	
 	logger.debug(`validator response: ${JSON.stringify(safeObj)}`)
+
+	await redisSet({id: id, validatorResponse: safeObj})
 
 	if (safeObj) return safeObj.valid
 	else return false
@@ -168,7 +174,7 @@ export const run = async (id: string, type: TaskType) => {
 	
 	const tx = await redisGet(id);
 	const taskDirect = tx?.type === TaskType.TASK_DIRECT;
-	const user_req = tx?.prompt?.req;
+	const user_req = tx?.prompt?.userRequest;
 
 	if (!user_req || user_req.length < 1)
 		throw new Error(`no user req string found for task ${id}`);
@@ -189,3 +195,4 @@ export const run = async (id: string, type: TaskType) => {
 
 	return result;
 };
+

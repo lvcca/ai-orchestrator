@@ -6,6 +6,7 @@ import {
 import {getLogger} from '../logger/logger.ts';
 import { Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
+import { registry } from '../tools/ToolBootstrap.ts';
 import { ToolExec } from './util.ts';
 import crypto from 'node:crypto';
 
@@ -19,8 +20,6 @@ export const RunExec = async (task_id: string, task: string, LLM_DIRECT: boolean
 	});
 
 	let final_output: string = 'FAILED';
-	let plan = '';
-	let revised_plan = '';
 
 	try {
 		if (LLM_DIRECT) final_output = await call_llm_chat(`${task}`);
@@ -28,9 +27,13 @@ export const RunExec = async (task_id: string, task: string, LLM_DIRECT: boolean
 		let initial_exec = await call_llm_toolcall(`
 You are an System Execution agent.
 
-Your job is to take decomposed tasks written into concise executable steps and execute them using internal APIs identified in the FileSystemApiSchema.
-                    
-Tool Request Format AND FileSystemApiSchema:
+Your job is to take decomposed tasks written into concise executable steps and execute them using internal APIs identified in the ToolSchemas.
+
+ToolSchemas:
+${registry.listSchemas()}
+${PROMPTS['file_system_schema']}
+
+Tool Request Format:
 ${PROMPTS['tool_types']}
 
 TASK:
