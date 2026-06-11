@@ -7,8 +7,8 @@ const logger: winston.Logger = winston.createLogger({
 		new winston.transports.Console({
 			format: winston.format.colorize(),
 			forceConsole: true,
-		})
+		}),
 	],
 });
 
-export const getLogger = (filename: string) => logger.child({filename})
+export const getLogger = (filename: string) => logger.child({ filename });

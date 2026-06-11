@@ -2,7 +2,7 @@ type UUID = string & { __brand: 'uuid' };
 
 export type Tool_Output = {
 	taskid: UUID;
-	identified_internal_tools_required: ToolEntry [];
+	identified_internal_tools_required: ToolEntry[];
 	completed_task: boolean;
 };
 
@@ -25,4 +25,4 @@ export type ToolEntry = {
 	Params: Parameter[];
 	Justification: string;
 	ExecutionTime: Date;
-}
+};

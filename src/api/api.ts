@@ -1,17 +1,12 @@
 import { app } from '../server/server.ts';
 import { randomUUID } from 'node:crypto';
-import {getLogger} from '../logger/logger.ts';
+import { getLogger } from '../logger/logger.ts';
 import { getHeader, run, taskInsert, validate } from './api_util.ts';
-import { Related, TaskType, Transaction } from '../state/types.ts';
-import { getExec, getTask } from '../state/util.ts';
+import { TaskType } from '../state/types.ts';
+import { getExec } from '../state/util.ts';
 import { redisGet, redisGetAll } from '../state/state.ts';
-import { RunTask } from '../worker/TaskWorker.ts';
-import { RunExec } from '../worker/ExecutionWorker.ts';
-import { call_llm_task_validator, PROMPTS } from '../llm.ts';
-import type { ValidatorResponse} from '../prompts/types/TaskValidator.ts'
-import { extractResponseBlock, parseJsonSafe } from '../worker/util.ts';
 
-const logger = getLogger('api')
+const logger = getLogger('api');
 
 // all incoming traffic
 app.use((req, res, next) => {
@@ -44,9 +39,9 @@ app.get('/task/allTasks', async (_, res) => {
 		for (const task of tasks) {
 			const state = await redisGet(task);
 			out.push(state);
-	}
+		}
 
-	return res.status(200).send(out)
+	return res.status(200).send(out);
 });
 
 app.get('/task/newTaskDirect', async (req, res) => {
@@ -73,7 +68,7 @@ app.get('/exec/allExec', async (_, res) => {
 app.get('/exec/newExec', async (req, res) => {
 	const exec_id = await taskInsert(req, TaskType.EXECUTION);
 	const llm_response = await run(exec_id, TaskType.EXECUTION);
-	
+
 	const validated = await validate(exec_id);
 	return res.status(200).send(llm_response);
 });

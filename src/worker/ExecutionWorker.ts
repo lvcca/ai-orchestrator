@@ -1,19 +1,18 @@
-import {
-	call_llm_chat,
-	call_llm_toolcall,
-	PROMPTS,
-} from '../llm.ts';
-import {getLogger} from '../logger/logger.ts';
+import { call_llm_chat, call_llm_toolcall, PROMPTS } from '../llm.ts';
+import { getLogger } from '../logger/logger.ts';
 import { Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
 import { ToolExec } from './util.ts';
 import crypto from 'node:crypto';
 
-const logger = getLogger('ExecutionWorker')
+const logger = getLogger('ExecutionWorker');
 
-export const RunExec = async (task_id: string, task: string, LLM_DIRECT: boolean) => {
-	
+export const RunExec = async (
+	task_id: string,
+	task: string,
+	LLM_DIRECT: boolean,
+) => {
 	await setTask({
 		id: task_id,
 		status: { status: Status.RUNNING },
@@ -54,24 +53,23 @@ Tool_Output`);
 		const tool_output = await ToolExec(exec_id, task, initial_exec);
 
 		// at this point tool should have executed...
-		
-		if (typeof tool_output === 'string') final_output = tool_output
-		
+
+		if (typeof tool_output === 'string') final_output = tool_output;
 	} catch (e) {
 		logger.error(`something went wrong in RunExec: ${e}`);
-		
+
 		await setTask({
 			id: task_id,
 			status: { status: Status.FAILED },
-			result: `${JSON.stringify(e)}`
+			result: `${JSON.stringify(e)}`,
 		});
 	}
 
 	await setTask({
 		id: task_id,
 		status: { status: Status.COMPLETED },
-		result: final_output
+		result: final_output,
 	});
 
-	return final_output
+	return final_output;
 };

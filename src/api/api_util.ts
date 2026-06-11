@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import { type Transaction, Related, Status, TaskType } from '../state/types.ts';
-import {getLogger} from '../logger/logger.ts';
+import { getLogger } from '../logger/logger.ts';
 import { redisExists, redisGet, redisSet } from '../state/state.ts';
 import { setExec, setJob, setTask } from '../state/util.ts';
 import crypto from 'node:crypto';
@@ -10,7 +10,7 @@ import { ValidatorResponse } from '../prompts/types/TaskValidator.ts';
 import { RunTask } from '../worker/TaskWorker.ts';
 import { RunExec } from '../worker/ExecutionWorker.ts';
 
-const logger = getLogger('api_util')
+const logger = getLogger('api_util');
 
 export const getHeader = (req: Request, header: string) => {
 	const _header = req.headers[header];
@@ -64,59 +64,58 @@ export const taskInsert = async (req: Request, type: TaskType) => {
 	return id;
 };
 
-
 export const resolveRelated = async (related?: Related) => {
-	let tasks: Transaction 	[] = []
-	let execs: Transaction 	[] = []
-	let jobs: Transaction 	[] = []
+	let tasks: Transaction[] = [];
+	let execs: Transaction[] = [];
+	let jobs: Transaction[] = [];
 
 	const out = {
 		tasks,
 		execs,
-		jobs
-	}
-	
-	if (!related) return out;	
-	
-	const {task, exec, job} = related
+		jobs,
+	};
+
+	if (!related) return out;
+
+	const { task, exec, job } = related;
 
 	if (task)
 		for (const t of task) {
-			const entry = await redisGet(t)
-			if (entry) tasks.push(entry)
+			const entry = await redisGet(t);
+			if (entry) tasks.push(entry);
 		}
-	
+
 	if (exec)
 		for (const e of exec) {
-			const entry = await redisGet(e)
-			if (entry) execs.push(entry)
+			const entry = await redisGet(e);
+			if (entry) execs.push(entry);
 		}
 
 	if (job)
 		for (const j of job) {
-			const entry = await redisGet(j)
-			if (entry) jobs.push(entry)
+			const entry = await redisGet(j);
+			if (entry) jobs.push(entry);
 		}
-	
-	return out
-}
+
+	return out;
+};
 
 export const validate = async (id?: string) => {
-	logger.info(`in validate`)
+	logger.info(`in validate`);
 
-	if (!id) throw new Error(`validate requires a valid id... id: ${id}`)	 
+	if (!id) throw new Error(`validate requires a valid id... id: ${id}`);
 	const entry = await redisGet(id);
-	if (!entry) throw new Error(`could not find valid entry: id: ${id}`)
-	
+	if (!entry) throw new Error(`could not find valid entry: id: ${id}`);
+
 	const res = entry.result;
-	const prompt = entry.prompt
-	const related = entry.related
-	const task = entry.prompt?.userRequest
+	const prompt = entry.prompt;
+	const related = entry.related;
+	const task = entry.prompt?.userRequest;
 
 	let result: string;
 
 	logger.info(`res: ${res}, prompt: ${JSON.stringify(prompt)}`);
-	
+
 	result = await call_llm_task_validator(`
 You are an Execution agent manager.
 
@@ -152,26 +151,27 @@ Output FORMAT:
 		"evidence": string[]
 }
 </LLM_RESPONSE>
-	`)
-	
-	logger.debug(`Task Validator Result: ${result}`)
+	`);
 
-	const responseBlock = extractResponseBlock(result)
-	if (!responseBlock) throw new Error(`invalid response from validator: ${responseBlock}`)
+	logger.debug(`Task Validator Result: ${result}`);
 
-	const safeObj = parseJsonSafe<ValidatorResponse>(responseBlock)
-	
-	logger.debug(`validator response: ${JSON.stringify(safeObj)}`)
+	const responseBlock = extractResponseBlock(result);
+	if (!responseBlock)
+		throw new Error(`invalid response from validator: ${responseBlock}`);
 
-	await redisSet({id: id, validatorResponse: safeObj})
+	const safeObj = parseJsonSafe<ValidatorResponse>(responseBlock);
 
-	if (safeObj) return safeObj.valid
-	else return false
-}
+	logger.debug(`validator response: ${JSON.stringify(safeObj)}`);
+
+	await redisSet({ id: id, validatorResponse: safeObj });
+
+	if (safeObj) return safeObj.valid;
+	else return false;
+};
 
 export const run = async (id: string, type: TaskType) => {
-	let result: string = 'FAILED'
-	
+	let result: string = 'FAILED';
+
 	const tx = await redisGet(id);
 	const taskDirect = tx?.type === TaskType.TASK_DIRECT;
 	const user_req = tx?.prompt?.userRequest;
@@ -188,11 +188,12 @@ export const run = async (id: string, type: TaskType) => {
 			result = await RunExec(id, user_req.join(','), taskDirect);
 			break;
 		default:
-			logger.warn(`no case for ${type}`)
+			logger.warn(`no case for ${type}`);
 	}
 
-	logger.info(`start result: type: ${type}, task: ${user_req}, result: ${result}`);
+	logger.info(
+		`start result: type: ${type}, task: ${user_req}, result: ${result}`,
+	);
 
 	return result;
 };
-

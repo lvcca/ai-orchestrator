@@ -1,4 +1,4 @@
-import { Tool } from "./ApiToolChain.ts";
+import { Tool } from './ApiToolChain.ts';
 
 export const FileSystemSchema: Tool[] = [
 	{

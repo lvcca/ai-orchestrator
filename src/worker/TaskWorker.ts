@@ -1,17 +1,17 @@
 import { call_llm_chat, call_llm_tasks } from '../llm.ts';
-import {getLogger} from '../logger/logger.ts';
+import { getLogger } from '../logger/logger.ts';
 import { Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
 import { parseJsonSafe, updatePrompt } from './util.ts';
 
-const logger = getLogger('TaskWorker')
+const logger = getLogger('TaskWorker');
 
 type TaskWorkerResultType = {
-	approved: boolean,
-	steps: string [],
-	revise_plan: boolean,
-	plan_feedback: string,
-}
+	approved: boolean;
+	steps: string[];
+	revise_plan: boolean;
+	plan_feedback: string;
+};
 
 const revise_plan = async (
 	task_id: string,
@@ -20,8 +20,13 @@ const revise_plan = async (
 	depth = 5,
 ) => {
 	// recursion exit
-	if (depth == 0) return { approved: false, revise_plan: false, steps: [plan], } as TaskWorkerResultType;
-	
+	if (depth == 0)
+		return {
+			approved: false,
+			revise_plan: false,
+			steps: [plan],
+		} as TaskWorkerResultType;
+
 	logger.info(`current task: ${task}`);
 	logger.info(`current plan: ${plan}`);
 
@@ -128,8 +133,8 @@ ${task}
 `);
 
 		const result: TaskWorkerResultType = await revise_plan(task_id, task, plan);
-		
-		revised_plan = result.steps.join()
+
+		revised_plan = result.steps.join();
 
 		final_output = await call_llm_tasks(`
 You are an execution agent.

@@ -1,9 +1,9 @@
 import { _env } from './env.ts';
-import {getLogger} from './logger/logger.ts';
+import { getLogger } from './logger/logger.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const logger = getLogger('llm')
+const logger = getLogger('llm');
 
 const LLM_MODEL = {
 	LLAMA_3_1: 'llama3.1',

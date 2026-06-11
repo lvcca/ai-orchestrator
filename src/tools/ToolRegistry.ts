@@ -1,75 +1,65 @@
-import { Tool } from "../prompts/types/ApiToolChain.ts";
+import { Tool } from '../prompts/types/ApiToolChain.ts';
 
 export type _func = (...args: any[]) => any;
 
 export type ToolEntry = {
-    readonly name: string;
-    readonly func: _func;
-    readonly schema?: string;
+	readonly name: string;
+	readonly func: _func;
+	readonly schema?: string;
 };
 
 export class ToolRegistry {
+	public readonly _tools: Map<string, ToolEntry> = new Map<string, ToolEntry>();
 
-    public readonly _tools: Map<string, ToolEntry> = new Map<string, ToolEntry>();
+	register(name: string, func: _func, schema?: string): void {
+		if (this._tools.has(name))
+			throw new Error(`Tool '${name}' is already registered`);
 
-    register(
-        name: string,
-        func: _func,
-        schema?: string,
-    ): void {
+		try {
+			console.log(
+				`registering tool name: ${name}, functype: ${typeof func}, func: ${func}, schema: ${schema}`,
+			);
 
-        if (this._tools.has(name)) throw new Error(`Tool '${name}' is already registered`);
-        
+			const tool: ToolEntry = {
+				name,
+				func,
+				schema,
+			};
 
-        try {
+			this._tools.set(name, tool);
 
-            console.log(
-                `registering tool name: ${name}, functype: ${typeof func}, func: ${func}, schema: ${schema}`
-            );
+			const sanityCheck = this._tools.get(name);
 
-            const tool: ToolEntry = {
-                name,
-                func,
-                schema,
-            };
+			console.log(`tool sanity check func: ${sanityCheck?.func}`);
+		} catch (e) {
+			console.error(`something went wrong in ToolRegistry register: ${e}`);
+		}
+	}
 
-            this._tools.set(name, tool);
+	get(name: string): ToolEntry | undefined {
+		return this._tools.get(name);
+	}
 
-            const sanityCheck = this._tools.get(name);
+	listTools(): ToolEntry[] {
+		const allTools: ToolEntry[] = [];
 
-            console.log(`tool sanity check func: ${sanityCheck?.func}`);
+		for (const key of this._tools.keys()) {
+			const tool = this._tools.get(key);
+			if (tool) allTools.push(tool);
+		}
 
-        } catch (e) {
-            console.error(
-                `something went wrong in ToolRegistry register: ${e}`
-            );
-        }
-    }
+		return allTools;
+	}
 
-    get(name: string): ToolEntry | undefined {
-        return this._tools.get(name);
-    }
+	listSchemas(): string[] {
+		const schemas = new Set<string>();
 
-    listTools(): ToolEntry [] {
-        const allTools: ToolEntry [] = []
+		for (const tool of this._tools.values()) {
+			if (tool.schema) {
+				schemas.add(tool.schema);
+			}
+		}
 
-        for (const key of this._tools.keys()) {
-            const tool = this._tools.get(key)
-            if (tool) allTools.push(tool)
-        }
-
-        return allTools;
-    }
-
-    listSchemas(): string[] {
-        const schemas = new Set<string>();
-
-        for (const tool of this._tools.values()) {
-            if (tool.schema) {
-                schemas.add(tool.schema);
-            }
-        }
-
-        return [...schemas];
-    }
+		return [...schemas];
+	}
 }

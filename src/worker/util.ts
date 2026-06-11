@@ -1,18 +1,23 @@
-import { call_llm_data_narrower, call_llm_shell_branch_analyzer, call_llm_shell_branch_simplifier, PROMPTS } from '../llm.ts';
-import {getLogger} from '../logger/logger.ts';
+import {
+	call_llm_data_narrower,
+	call_llm_shell_branch_analyzer,
+	call_llm_shell_branch_simplifier,
+	PROMPTS,
+} from '../llm.ts';
+import { getLogger } from '../logger/logger.ts';
 import { Parameter, Tool_Output } from '../prompts/types/ApiToolChain.ts';
 import { redisGet } from '../state/state.ts';
 import { Status, TaskType } from '../state/types.ts';
 import { getTask, setJob, setTask } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
 import { _func, ToolEntry } from '../tools/ToolRegistry.ts';
-import crypto from 'node:crypto'
+import crypto from 'node:crypto';
 
-const logger = getLogger('worker_util')
+const logger = getLogger('worker_util');
 
-export const parseJsonSafe = <T> (text: string): T => {
+export const parseJsonSafe = <T>(text: string): T => {
 	logger.debug(`parseJsonSafe text: ${text}`);
-	
+
 	try {
 		return JSON.parse(text) as T;
 	} catch {
@@ -25,29 +30,27 @@ export const extractResponseBlock = (text: string) => {
 
 	const match = text.match(pattern);
 
-	logger.info(`extract response block text: ${text}, match: ${match}`)
+	logger.info(`extract response block text: ${text}, match: ${match}`);
 
 	if (match) return match[1].trim();
-	
 	else {
-
 		let validJson = false;
 
 		try {
-			parseJsonSafe(text); 
-			validJson = true
-		}
-		catch (e){
-			logger.error(`extracted text was not valid json`)
+			parseJsonSafe(text);
+			validJson = true;
+		} catch (e) {
+			logger.error(`extracted text was not valid json`);
 		}
 
 		if (validJson) {
-			logger.info(`no match found defaulting to text passed in: ${text}`)
-			return text
-		}
-		else throw new Error(`unexpected error in extractResponseBlock: validJson: ${validJson}, text: ${text}`)
-	
-	};
+			logger.info(`no match found defaulting to text passed in: ${text}`);
+			return text;
+		} else
+			throw new Error(
+				`unexpected error in extractResponseBlock: validJson: ${validJson}, text: ${text}`,
+			);
+	}
 };
 
 export const updatePrompt = async (
@@ -75,32 +78,42 @@ export const updatePrompt = async (
 	});
 };
 
-const SafeExecute = async (key: string, tool: ToolEntry, Params: Parameter[]) => {
-	if (!tool.func) throw new Error(`something went wrong in SafeExecute, tool: ${JSON.stringify(tool)} `)
+const SafeExecute = async (
+	key: string,
+	tool: ToolEntry,
+	Params: Parameter[],
+) => {
+	if (!tool.func)
+		throw new Error(
+			`something went wrong in SafeExecute, tool: ${JSON.stringify(tool)} `,
+		);
 
 	let validResult: string = 'FAILED';
-	let result: unknown = validResult
-	
-	await setJob({id: key, status: {status: Status.RUNNING, message: 'In safe Execute'}})
+	let result: unknown = validResult;
+
+	await setJob({
+		id: key,
+		status: { status: Status.RUNNING, message: 'In safe Execute' },
+	});
 
 	try {
+		await setJob({
+			id: key,
+			status: { status: Status.RUNNING, message: 'Preparing to execute' },
+		});
 
-		await setJob({id: key, status: {status: Status.RUNNING, message: 'Preparing to execute'}})
+		const func = tool.func;
+		const params = Params.map((p) => {
+			return {
+				...p,
+			}.value;
+		});
 
-		const func = tool.func
-		const params = Params.map( 
-			(p) => {
-				return {
-					...p
-				}.value
-			}
-		)
+		logger.info(`params: ${JSON.stringify(params)}`);
 
-		logger.info(`params: ${JSON.stringify(params)}`)
+		result = await func(...params);
 
-		result = await func(...params)
-		
-		switch (true){
+		switch (true) {
 			case typeof result === 'string':
 				validResult = result;
 				break;
@@ -108,81 +121,79 @@ const SafeExecute = async (key: string, tool: ToolEntry, Params: Parameter[]) =>
 				const keys = Object.keys(result as any);
 				const vals = Object.values(result as any);
 				// type check
-				const output = keys.findIndex(k => k === 'output')
-				const error = keys.findIndex(k => k === 'error')
-				const input = keys.findIndex(k => k === 'input')
+				const output = keys.findIndex((k) => k === 'output');
+				const error = keys.findIndex((k) => k === 'error');
+				const input = keys.findIndex((k) => k === 'input');
 
-				if (output > -1 && error > -1 && input > -1)
-				{
+				if (output > -1 && error > -1 && input > -1) {
 					logger.info('is a shell result type');
 
-					const _input = vals[input] as string 
-					const _output = vals[output] as string
-					const _error = vals[error] as string
+					const _input = vals[input] as string;
+					const _output = vals[output] as string;
+					const _error = vals[error] as string;
 
-					validResult = _output || _error || _input // placeholder failsafe
+					validResult = _output || _error || _input; // placeholder failsafe
 				}
-
 			}
-
 		}
 
 		await setJob({
-			id: key, 
+			id: key,
 			status: {
-				status: Status.COMPLETED, 
-				message: 'Execution complete!'
-		}})
+				status: Status.COMPLETED,
+				message: 'Execution complete!',
+			},
+		});
 
-		logger.info(`[*] SafeExecute result: ${JSON.stringify(result)}`)
+		logger.info(`[*] SafeExecute result: ${JSON.stringify(result)}`);
 
 		return validResult;
-		
 	} catch (e) {
-		const msg = `something went wrong in safe_execute: ${JSON.stringify(e)}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`
-		
-		await setJob({
-			id: key, 
-			status: {
-				status: Status.FAILED, 
-				message: msg
-		}})
+		const msg = `something went wrong in safe_execute: ${JSON.stringify(e)}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`;
 
-		logger.error(msg)
+		await setJob({
+			id: key,
+			status: {
+				status: Status.FAILED,
+				message: msg,
+			},
+		});
+
+		logger.error(msg);
 	}
 
 	return `${result}`;
-}
+};
 
 const addJobToTask = async (task_id: string, job_id: string) => {
 	const entry = await redisGet(task_id);
 	const currPrompt = entry?.prompt;
 	let saved = false;
-	const related = entry?.related
-	
-	const jobs = related?.job ?? []
-	const tasks = related?.task ?? []
-	const execs = related?.exec ?? []
+	const related = entry?.related;
 
-	// save job id in parent 
-	jobs?.push(job_id)
+	const jobs = related?.job ?? [];
+	const tasks = related?.task ?? [];
+	const execs = related?.exec ?? [];
 
-	switch (entry?.type){
+	// save job id in parent
+	jobs?.push(job_id);
+
+	switch (entry?.type) {
 		case TaskType.TASK:
 		case TaskType.TASK_DIRECT:
 			saved = await setTask({
-			id: task_id,
-			related: {
-				job: jobs,
-				task: tasks,
-				exec: execs
-		}})
-		default: 
-			logger.warn(`no case found for ${entry?.type} in addJobToTask..`)
+				id: task_id,
+				related: {
+					job: jobs,
+					task: tasks,
+					exec: execs,
+				},
+			});
+		default:
+			logger.warn(`no case found for ${entry?.type} in addJobToTask..`);
 	}
 	return saved;
 };
-
 
 const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 	let pivotRequired = false;
@@ -194,12 +205,11 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 
 		for (const step of steps) {
 			if (pivotRequired) throw new Error('pivotRequired in branching!');
-			
 			else {
 				// save job_id
 				const job_id = crypto.randomUUID();
 				jobs.set(job_id, undefined);
-				
+
 				await setJob({
 					id: job_id,
 					type: TaskType.JOB,
@@ -213,31 +223,32 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 				});
 
 				// add link to main task
-				await addJobToTask(task_id, job_id)
+				await addJobToTask(task_id, job_id);
 
 				// @ts-ignore
-				const tool: string = step['Tool'] as string // TODO - fix me 
-				const params = step.Params ?? []
+				const tool: string = step['Tool'] as string; // TODO - fix me
+				const params = step.Params ?? [];
 
-				logger.info(`identified tool: ${tool}, params: ${JSON.stringify(params)}`)
-	
-				const found_tool: ToolEntry | undefined = registry.get(tool)
-				
-				if (!found_tool) 
-					throw new Error(`could not find tool ${tool}`)
+				logger.info(
+					`identified tool: ${tool}, params: ${JSON.stringify(params)}`,
+				);
+
+				const found_tool: ToolEntry | undefined = registry.get(tool);
+
+				if (!found_tool) throw new Error(`could not find tool ${tool}`);
 
 				const result = await SafeExecute(job_id, found_tool, params);
 
-				if (!result) throw new Error(`no result came back from SafeExecute...`)					
-				
-				final_results = result
+				if (!result) throw new Error(`no result came back from SafeExecute...`);
+
+				final_results = result;
 			}
 		}
 	} catch (e) {
 		logger.error(`something went wrong in TaskProcessJob: ${e}`);
 	}
 
-	logger.info(`final results from process task util: ${final_results}`)
+	logger.info(`final results from process task util: ${final_results}`);
 
 	return final_results;
 };
@@ -247,7 +258,6 @@ export const ToolExec = async (
 	task: string,
 	initial_exec: string,
 ) => {
-
 	await setTask({
 		id: task_id,
 		status: {
@@ -263,9 +273,10 @@ export const ToolExec = async (
 			`sanitize the following output: ${initial_exec}`,
 		);
 
-		const block = extractResponseBlock(narrowed)
+		const block = extractResponseBlock(narrowed);
 
-		if (!block) throw new Error(`no block found from narrowed response, block: ${block}`)
+		if (!block)
+			throw new Error(`no block found from narrowed response, block: ${block}`);
 
 		const json_response = parseJsonSafe<Tool_Output>(block);
 		const steps = json_response.identified_internal_tools_required;
@@ -280,20 +291,18 @@ export const ToolExec = async (
 			id: task_id,
 			result,
 			status: {
-				status: Status.COMPLETED
-			}
+				status: Status.COMPLETED,
+			},
 		});
-
 	} catch (e) {
-
 		logger.error(`something went wrong in ToolExec: ${e}`);
-		
+
 		await setTask({
 			id: task_id,
 			status: {
-				status: Status.FAILED, 
-				message: `${JSON.stringify(e)}`
-			}
+				status: Status.FAILED,
+				message: `${JSON.stringify(e)}`,
+			},
 		});
 	}
 
@@ -305,32 +314,37 @@ const SimplifyOpinion = async (next_step: string) => {
 You are a quality assurance expert. 
 
 Input:
-${ next_step }
+${next_step}
 
 Expected Output Format:
 <LLM_RESPONSE>
     ShellBranchAnalysisSimplified
 </LLM_RESPONSE>
-`)
-    return final_result
-}
+`);
+	return final_result;
+};
 
-const FormatStringArray = (results: string []) => {
-	let res = ``
-	for (const result of results){
-		res += result + '\n'
+const FormatStringArray = (results: string[]) => {
+	let res = ``;
+	for (const result of results) {
+		res += result + '\n';
 	}
-	return res
-}
+	return res;
+};
 
-const GetSecondOpinion = async (analysis: string, job_results: string[], job_ids: string[], task_id: string) => {
+const GetSecondOpinion = async (
+	analysis: string,
+	job_results: string[],
+	job_ids: string[],
+	task_id: string,
+) => {
 	const final_result = await call_llm_shell_branch_analyzer(`
 You are a quality assurance expert.
 
 Your sole purpose is to evaluate the analysis of a job 
 
 Analysis:
-${ analysis }
+${analysis}
 
 Pivot Decision Rule:
 If pivot_required=true ALWAYS include a viable "next_step".                                        
@@ -367,16 +381,16 @@ Expected Output Format:
 <LLM_RESPONSE>
     ShellBranchAnalysis
 </LLM_RESPONSE>
-`)
-    return final_result
-}
+`);
+	return final_result;
+};
 
 const AnalyzeShellResults = async (
-	job_results: string[], 
-	job_ids: string[], 
-	task_id: string
-	) => {
-	    const final_results = await call_llm_shell_branch_analyzer(`
+	job_results: string[],
+	job_ids: string[],
+	task_id: string,
+) => {
+	const final_results = await call_llm_shell_branch_analyzer(`
 You are a System Execution Branch Analysis agent.
 
 Your sole responsibility is to evaluate whether the current execution branch remains viable for accomplishing the task goal.
@@ -437,7 +451,7 @@ Analysis Instructions:
 Expected Output Format:
 <LLM_RESPONSE>
     ShellBranchAnalysis
-</LLM_RESPONSE>`)
+</LLM_RESPONSE>`);
 
-    return final_results
-}
+	return final_results;
+};
