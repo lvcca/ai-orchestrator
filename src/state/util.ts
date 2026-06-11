@@ -1,6 +1,8 @@
 import { redisGet, redisSet } from './state.ts';
 import { Transaction, TaskType } from './types.ts';
-import logger from '../logger/logger.ts';
+import {getLogger} from '../logger/logger.ts';
+
+const logger = getLogger('state_util')
 
 export const setTask = async (tx: Transaction) => {
 	if (
@@ -17,18 +19,10 @@ export const setTask = async (tx: Transaction) => {
 	return successful;
 };
 
-type TransactionChild = {
-	related?: {
-		task_id?: string;
-		exec_id?: string;
-		job_id?: string;
-	};
-};
-
 export const setExec = async (
-	tx: Transaction & TransactionChild & { exec?: string },
+	tx: Transaction & {exec?: string}
 ) => {
-	if (tx.type !== TaskType.EXECUTION)
+	if (tx.type && tx.type !== TaskType.EXECUTION)
 		throw new Error(
 			`task type mismatch: requested: ${tx.type}, expected ${TaskType.EXECUTION}`,
 		);
@@ -37,9 +31,9 @@ export const setExec = async (
 };
 
 export const setJob = async (
-	tx: Transaction & TransactionChild & { job?: string },
+	tx: Transaction & {job?: string}
 ) => {
-	if (tx.type !== TaskType.JOB)
+	if (tx.type && tx.type !== TaskType.JOB)
 		throw new Error(
 			`task type mismatch: requested: ${tx.type}, expected ${TaskType.JOB}`,
 		);

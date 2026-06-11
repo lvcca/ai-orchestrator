@@ -3,8 +3,10 @@ import {
 	type RedisClientType,
 	type RedisDefaultModules,
 } from 'redis';
-import logger from '../logger/logger.ts';
+import {getLogger} from '../logger/logger.ts';
 import type { Transaction } from './types.ts';
+
+const logger = getLogger('state')
 
 const client: RedisClientType = createClient({
 	url: 'redis://redis:6379',
@@ -70,7 +72,7 @@ export const redisSet = async (tx: Transaction) => {
 export const redisGetAll = async () => {
 	try {
 		const _connection = await getConnection();
-		const keys = await _connection.keys('*');
+		const keys = await _connection.keys('*') ?? [];
 
 		if (!keys || keys.length < 1) throw new Error(`could not find entries..`);
 

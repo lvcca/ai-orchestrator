@@ -1,8 +1,11 @@
 import type { Request } from 'express';
 import { type Transaction, Status, TaskType } from '../state/types.ts';
-import logger from '../logger/logger.ts';
+import {getLogger} from '../logger/logger.ts';
 import { redisExists } from '../state/state.ts';
 import { setExec, setJob, setTask } from '../state/util.ts';
+import crypto from 'node:crypto';
+
+const logger = getLogger('api_util')
 
 export const getHeader = (req: Request, header: string) => {
 	const _header = req.headers[header];

@@ -1,11 +1,14 @@
 import { call_llm_data_narrower } from '../llm.ts';
-import logger from '../logger/logger.ts';
-import { Parameter, Tool, Tool_Output } from '../prompts/types/ApiToolChain.ts';
+import {getLogger} from '../logger/logger.ts';
+import { Parameter, Tool_Output } from '../prompts/types/ApiToolChain.ts';
+import { redisGet } from '../state/state.ts';
 import { Status, TaskType } from '../state/types.ts';
-import { getTask, setExec, setJob, setTask } from '../state/util.ts';
+import { getTask, setJob, setTask } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
 import { _func, ToolEntry } from '../tools/ToolRegistry.ts';
 import crypto from 'node:crypto'
+
+const logger = getLogger('worker_util')
 
 export const parseJsonSafe = (text: string) => {
 	try {
@@ -56,9 +59,16 @@ export const updatePrompt = async (
 const SafeExecute = async (key: string, tool: ToolEntry, Params: Parameter[]) => {
 	if (!tool.func) throw new Error(`something went wrong in SafeExecute, tool: ${JSON.stringify(tool)} `)
 
+	let result: string = 'FAILED'
+
+	await setJob({id: key, status: {status: Status.RUNNING, message: 'In safe Execute'}})
+
 	try {
+
+		await setJob({id: key, status: {status: Status.RUNNING, message: 'Preparing to execute'}})
+
 		const func = tool.func
-		const params = Params.map(
+		const params = Params.map( 
 			(p) => {
 				return {
 					...p
@@ -68,22 +78,66 @@ const SafeExecute = async (key: string, tool: ToolEntry, Params: Parameter[]) =>
 
 		logger.info(`params: ${JSON.stringify(params)}`)
 
-		const result = await func(...params)
+		result = await func(...params)
+
+		await setJob({
+			id: key, 
+			status: {
+				status: Status.COMPLETED, 
+				message: 'Execution complete!'
+		}})
 
 		logger.info(`[*] SafeExecute result: ${result}`)
 		
-		return result;
 	} catch (e) {
-		logger.error(`something went wrong in safe_execute: ${JSON.stringify(e)}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`)
+		const msg = `something went wrong in safe_execute: ${JSON.stringify(e)}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`
+		
+		await setJob({
+			id: key, 
+			status: {
+				status: Status.FAILED, 
+				message: msg
+		}})
+
+		logger.error(msg)
 	}
-	
+
+	return result;
 }
 
-const ProcessTask = async (task_id: string, task: Tool_Output) => {
-	let successful = false;
-	let pivotRequired = false;
+const addJobToTask = async (task_id: string, job_id: string) => {
+	const entry = await redisGet(task_id);
+	const currPrompt = entry?.prompt;
+	let saved = false;
+	const related = entry?.related
+	
+	const jobs = related?.job ?? []
+	const tasks = related?.task ?? []
+	const execs = related?.exec ?? []
 
-	let final_results: string | undefined;
+	// save job id in parent 
+	jobs?.push(job_id)
+
+	switch (entry?.type){
+		case TaskType.TASK:
+		case TaskType.TASK_DIRECT:
+			saved = await setTask({
+			id: task_id,
+			related: {
+				job: jobs,
+				task: tasks,
+				exec: execs
+		}})
+		default: 
+			logger.warn(`no case found for ${entry?.type} in addJobToTask..`)
+	}
+	return saved;
+};
+
+
+const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
+	let pivotRequired = false;
+	let final_results: string = 'FAILED';
 	let jobs = new Map<string, string | undefined>();
 
 	try {
@@ -91,16 +145,17 @@ const ProcessTask = async (task_id: string, task: Tool_Output) => {
 
 		for (const step of steps) {
 			if (pivotRequired) throw new Error('pivotRequired in branching!');
+			
 			else {
 				// save job_id
 				const job_id = crypto.randomUUID();
 				jobs.set(job_id, undefined);
-
+				
 				await setJob({
 					id: job_id,
 					type: TaskType.JOB,
 					related: {
-						task_id: task_id,
+						task: [task_id],
 					},
 					job: JSON.stringify(step),
 					status: {
@@ -108,28 +163,34 @@ const ProcessTask = async (task_id: string, task: Tool_Output) => {
 					},
 				});
 
+				// add link to main task
+				await addJobToTask(task_id, job_id)
+
 				// @ts-ignore
-				const tool: string = step['Tool'] as string
-				
+				const tool: string = step['Tool'] as string // TODO - fix me 
 				const params = step.Params ?? []
 
 				logger.info(`identified tool: ${tool}, params: ${JSON.stringify(params)}`)
-				
+	
 				const found_tool: ToolEntry | undefined = registry.get(tool)
+				
+				if (!found_tool) 
+					throw new Error(`could not find tool ${tool}`)
 
-				if (!found_tool) throw new Error(`could not find tool ${tool}`)
+				const result = await SafeExecute(job_id, found_tool, params);
 
-				const result: unknown = SafeExecute(job_id, found_tool, params);
-
-				logger.info(`[*] result: ${JSON.stringify(result)}`)
-
+				if (!result) throw new Error(`no result came back from SafeExecute...`)					
+				
+				final_results = result
 			}
 		}
 	} catch (e) {
-		logger.error(`something went wrong in ProcessTask: ${e}`);
+		logger.error(`something went wrong in TaskProcessJob: ${e}`);
 	}
 
-	return '';
+	logger.info(`final results from process task util: ${final_results}`)
+
+	return final_results;
 };
 
 export const ToolExec = async (
@@ -137,6 +198,7 @@ export const ToolExec = async (
 	task: string,
 	initial_exec: string,
 ) => {
+
 	await setTask({
 		id: task_id,
 		status: {
@@ -145,7 +207,7 @@ export const ToolExec = async (
 		},
 	});
 
-	let result: string = '';
+	let result: string = 'FAILED';
 
 	try {
 		const narrowed = await call_llm_data_narrower(
@@ -163,14 +225,28 @@ export const ToolExec = async (
 			throw new Error(`no steps found: ${steps}`);
 
 		// exec
-		const result = await ProcessTask(task_id, json_response);
+		result = await TaskProcessJob(task_id, json_response);
 
 		await setTask({
 			id: task_id,
 			result,
+			status: {
+				status: Status.COMPLETED
+			}
 		});
 
 	} catch (e) {
+
 		logger.error(`something went wrong in ToolExec: ${e}`);
+		
+		await setTask({
+			id: task_id,
+			status: {
+				status: Status.FAILED, 
+				message: `${JSON.stringify(e)}`
+			}
+		});
 	}
+
+	return result;
 };

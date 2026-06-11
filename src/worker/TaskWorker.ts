@@ -1,8 +1,10 @@
 import { call_llm_chat, call_llm_tasks } from '../llm.ts';
-import logger from '../logger/logger.ts';
+import {getLogger} from '../logger/logger.ts';
 import { Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
 import { parseJsonSafe, updatePrompt } from './util.ts';
+
+const logger = getLogger('TaskWorker')
 
 const revise_plan = async (
 	task_id: string,

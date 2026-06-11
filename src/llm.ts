@@ -1,7 +1,9 @@
 import { _env } from './env.ts';
-import logger from './logger/logger.ts';
+import {getLogger} from './logger/logger.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+
+const logger = getLogger('llm')
 
 const LLM_MODEL = {
 	LLAMA_3_1: 'llama3.1',
@@ -83,6 +85,7 @@ const CODING_TASKS_PROMPTS_FILE = './prompts/coding_tasks_prompts.md';
 const EXECUTION_PROMPTS_FILE = './prompts/execution_prompts.md';
 const CHAT_PROMPTS_FILE = './prompts/chat_prompts.md';
 const TOOL_NARROWER_PROMPTS_FILE = './prompts/tool_narrower.md';
+const TASK_RESULTS_VALIDATOR = './prompts/task_validator.md';
 const SHELL_EXECUTOR_PROMPTS_FILE = './prompts/shell_executor_prompts.md';
 const SHELL_EXECUTOR_BRANCH_PROMPTS_FILE =
 	'./prompts/shell_executor_branch_prompts.md';
@@ -98,12 +101,15 @@ const TOOL_API_TYPE_FILE = './prompts/types/ApiToolChain.ts';
 const SHELL_EXECUTOR_TYPE_FILE = './prompts/types/ShellExecutor.ts';
 const SHELL_BRANCH_ANALYSIS_TYPE_FILE = './prompts/types/ShellBranch.ts';
 const SHELL_RESULTS_TYPE_FILE = './prompts/types/ShellResults.ts';
+const TASK_RESULTS_VALIDATOR_TYPES = './prompts/types/TaskValidator.ts';
 
 export const PROMPTS = {
 	tasks: await load_context(CODING_TASKS_PROMPTS_FILE),
 	execution: await load_context(EXECUTION_PROMPTS_FILE),
 	chat: await load_context(CHAT_PROMPTS_FILE),
 	tool_narrower: await load_context(TOOL_NARROWER_PROMPTS_FILE),
+	task_result_validator: await load_context(TASK_RESULTS_VALIDATOR),
+	task_result_validator_type: await load_context(TASK_RESULTS_VALIDATOR_TYPES),
 	// aux
 	tool_types: await load_context(TOOL_API_TYPE_FILE),
 	karpathy_guidelines: await load_context(KARPATHY_GUIDELINES_PROMPTS_FILE),
@@ -189,6 +195,14 @@ export const call_llm_shell_branch_analyzer = async (prompt: string) => {
 
 export const call_llm_shell_branch_simplifier = async (prompt: string) => {
 	const withContext = PROMPTS['shell_executor_branch_analyst'] + prompt;
+	const res = await call_LLM(withContext);
+	if (!res) throw new Error(`did not receive response from llm: ${res}`);
+
+	return res;
+};
+
+export const call_llm_task_validator = async (prompt: string) => {
+	const withContext = PROMPTS['task_result_validator'] + prompt;
 	const res = await call_LLM(withContext);
 	if (!res) throw new Error(`did not receive response from llm: ${res}`);
 

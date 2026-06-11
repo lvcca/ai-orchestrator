@@ -27,10 +27,17 @@ export const TaskType = {
 
 export type TaskType = (typeof TaskType)[keyof typeof TaskType];
 
+export type Related = {
+	job?: 	string [],
+	task?: 	string[],
+	exec?: 	string[],
+} | undefined
+
 export type Transaction = {
-	id: string;
-	type?: TaskType;
-	status?: _Status;
-	prompt?: Prompt;
-	result?: string; // final llm response
+	id: 		string;
+	type?: 		TaskType;
+	status?: 	_Status;
+	prompt?: 	Prompt;
+	related?: 	Related
+	result?: 	string; // final llm response
 };

@@ -5,8 +5,10 @@ import { createReadStream } from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
-import logger from "../logger/logger.ts";
+import {getLogger} from "../logger/logger.ts";
 import { ToolRegistry } from "./ToolRegistry.ts";
+
+const logger = getLogger('FileSystem')
 
 const execAsync = promisify(exec);
 
