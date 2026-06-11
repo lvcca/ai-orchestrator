@@ -10,12 +10,13 @@ import crypto from 'node:crypto'
 
 const logger = getLogger('worker_util')
 
-export const parseJsonSafe = (text: string) => {
+export const parseJsonSafe = <T> (text: string): T => {
+	logger.debug(`parseJsonSafe text: ${text}`);
+	
 	try {
-		logger.info(`parseJsonSafe text: ${text}`);
-		return JSON.parse(text);
+		return JSON.parse(text) as T;
 	} catch {
-		return null;
+		throw new Error(`invalid json: ${text}`);
 	}
 };
 
@@ -218,7 +219,7 @@ export const ToolExec = async (
 
 		if (!block) throw new Error(`no block found from narrowed response, block: ${block}`)
 
-		const json_response = parseJsonSafe(block) as Tool_Output;
+		const json_response = parseJsonSafe<Tool_Output>(block);
 		const steps = json_response.identified_internal_tools_required;
 
 		if (!steps || (Array.isArray(steps) && steps.length < 1))

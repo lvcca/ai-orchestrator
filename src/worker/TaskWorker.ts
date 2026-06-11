@@ -6,20 +6,22 @@ import { parseJsonSafe, updatePrompt } from './util.ts';
 
 const logger = getLogger('TaskWorker')
 
+type TaskWorkerResultType = {
+	approved: boolean,
+	steps: string [],
+	revise_plan: boolean,
+	plan_feedback: string,
+}
+
 const revise_plan = async (
 	task_id: string,
 	task: string,
 	plan: string,
 	depth = 5,
 ) => {
-	if (depth == 0) {
-		return {
-			approved: false,
-			steps: plan,
-			revise_plan: false,
-		};
-	}
-
+	// recursion exit
+	if (depth == 0) return { approved: false, revise_plan: false, steps: [plan], } as TaskWorkerResultType;
+	
 	logger.info(`current task: ${task}`);
 	logger.info(`current plan: ${plan}`);
 
@@ -66,14 +68,14 @@ ${{
 
 	logger.info(`response: ${raw}`);
 
-	const result = parseJsonSafe(raw);
+	const result = parseJsonSafe<TaskWorkerResultType>(raw);
 
 	if (!result) return revise_plan(task_id, task, plan, depth - 1);
 
 	if (result.approved) return result;
 	// if not approved
 	else {
-		const new_plan = result['steps'] ?? plan;
+		const new_plan = result['steps'].join() ?? plan;
 		const plan_feedback = JSON.stringify(result['plan_feedback']);
 		let _new_plan = new_plan;
 
@@ -125,7 +127,9 @@ TASK:
 ${task}
 `);
 
-		revised_plan = await revise_plan(task_id, task, plan);
+		const result: TaskWorkerResultType = await revise_plan(task_id, task, plan);
+		
+		revised_plan = result.steps.join()
 
 		final_output = await call_llm_tasks(`
 You are an execution agent.

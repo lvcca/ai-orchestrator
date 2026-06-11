@@ -1,9 +1,14 @@
 import type { Request } from 'express';
-import { type Transaction, Status, TaskType } from '../state/types.ts';
+import { type Transaction, Related, Status, TaskType } from '../state/types.ts';
 import {getLogger} from '../logger/logger.ts';
-import { redisExists } from '../state/state.ts';
+import { redisExists, redisGet } from '../state/state.ts';
 import { setExec, setJob, setTask } from '../state/util.ts';
 import crypto from 'node:crypto';
+import { call_llm_task_validator } from '../llm.ts';
+import { extractResponseBlock, parseJsonSafe } from '../worker/util.ts';
+import { ValidatorResponse } from '../prompts/types/TaskValidator.ts';
+import { RunTask } from '../worker/TaskWorker.ts';
+import { RunExec } from '../worker/ExecutionWorker.ts';
 
 const logger = getLogger('api_util')
 
@@ -57,4 +62,130 @@ export const taskInsert = async (req: Request, type: TaskType) => {
 	}
 
 	return id;
+};
+
+
+export const resolveRelated = async (related?: Related) => {
+	logger.info(`in resolveRelated`)
+
+	let tasks: Transaction 	[] = []
+	let execs: Transaction 	[] = []
+	let jobs: Transaction 	[] = []
+
+	const out = {
+		tasks,
+		execs,
+		jobs
+	}
+	
+	if (!related) return out;	
+	
+	const {task, exec, job} = related
+
+	if (task)
+		for (const t of task) {
+			const entry = await redisGet(t)
+			if (entry) tasks.push(entry)
+		}
+	
+	if (exec)
+		for (const e of exec) {
+			const entry = await redisGet(e)
+			if (entry) execs.push(entry)
+		}
+
+	if (job)
+		for (const j of job) {
+			const entry = await redisGet(j)
+			if (entry) jobs.push(entry)
+		}
+	
+	return out
+}
+
+export const validate = async (id?: string) => {
+	logger.info(`in validate`)
+
+	if (!id) throw new Error(`validate requires a valid id... id: ${id}`)	 
+	const entry = await redisGet(id);
+	if (!entry) throw new Error(`could not find valid entry: id: ${id}`)
+	
+	const res = entry.result;
+	const prompt = entry.prompt
+	const related = entry.related
+	let result: string;
+
+	logger.info(`res: ${res}, prompt: ${JSON.stringify(prompt)}`);
+	
+	result = await call_llm_task_validator(`
+	You are an Execution agent manager.
+	
+	Your job is to take results from a task and determine whether or not the task goal was accomplished.
+						
+	Task Result:
+	${JSON.stringify(res)}
+	
+	Related Tasks:
+	${JSON.stringify(await resolveRelated(related))}
+
+	LLM Prompt History:
+	${JSON.stringify(prompt)}
+	
+	RULES:
+	- Use ONLY valid JSON as output 
+	- Always explain reasoning
+	- Do NOT include markdown
+	- There are at most 5 steps
+	- Steps are concrete and actionable
+	- Any text not in Javascript notation MUST be prepended with a comment
+	
+	ONLY ACCEPTABLE OUTPUT FORMAT:
+	<LLM_RESPONSE>
+		type ValidatorResponse = {
+			"valid": boolean,
+			"reason": string | null,
+			"confidence": number,
+			"issues": string[],
+			"evidence": string[]
+		}
+	</LLM_RESPONSE>`)
+	
+	logger.debug(`Task Validator Result: ${result}`)
+
+	const responseBlock = extractResponseBlock(result)
+	if (!responseBlock) throw new Error('invalid response from validator')
+
+	const safeObj = parseJsonSafe<ValidatorResponse>(responseBlock)
+	
+	logger.debug(`validator response: ${JSON.stringify(safeObj)}`)
+
+	if (safeObj) return safeObj.valid
+	else return false
+}
+
+export const run = async (id: string, type: TaskType) => {
+	let result: string = 'FAILED'
+	
+	const tx = await redisGet(id);
+	const taskDirect = tx?.type === TaskType.TASK_DIRECT;
+	const user_req = tx?.prompt?.req;
+
+	if (!user_req || user_req.length < 1)
+		throw new Error(`no user req string found for task ${id}`);
+
+	switch (type) {
+		case TaskType.TASK_DIRECT:
+		case TaskType.TASK:
+			result = await RunTask(id, user_req.join(','), taskDirect);
+			break;
+		case TaskType.EXECUTION:
+			result = await RunExec(id, user_req.join(','), taskDirect);
+			break;
+		default:
+			logger.warn(`no case for ${type}`)
+	}
+
+	logger.info(`start result: type: ${type}, task: ${user_req}, result: ${result}`);
+
+	return result;
 };
