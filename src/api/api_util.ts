@@ -159,14 +159,13 @@ Output FORMAT:
 	if (!responseBlock)
 		throw new Error(`invalid response from validator: ${responseBlock}`);
 
-	const safeObj = parseJsonSafe<ValidatorResponse>(responseBlock);
+	const validatorResponse = parseJsonSafe<ValidatorResponse>(responseBlock);
 
-	logger.debug(`validator response: ${JSON.stringify(safeObj)}`);
+	logger.debug(`validator response: ${JSON.stringify(validatorResponse)}`);
 
-	await redisSet({ id: id, validatorResponse: safeObj });
+	await redisSet({ id: id, validatorResponse: validatorResponse });
 
-	if (safeObj) return safeObj.valid;
-	else return false;
+	return validatorResponse;
 };
 
 export const run = async (id: string, type: TaskType) => {

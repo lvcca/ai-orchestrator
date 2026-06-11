@@ -6,11 +6,11 @@ export type Prompt = {
 };
 
 export const Status = {
-	FAILED: -1,
-	QUEUED: 0,
-	RUNNING: 1,
-	COMPLETED: 2,
-	HALTED: 3,
+	FAILED: 'FAILED',
+	QUEUED: 'QUEUED',
+	RUNNING: 'RUNNING',
+	COMPLETED: 'COMPLETED',
+	HALTED: 'HALTED',
 } as const;
 
 export type Status = (typeof Status)[keyof typeof Status];
@@ -21,10 +21,10 @@ export type _Status = {
 };
 
 export const TaskType = {
-	TASK_DIRECT: -1,
-	TASK: 0,
-	EXECUTION: 1,
-	JOB: 2,
+	TASK_DIRECT: 'TASK_DIRECT',
+	TASK: 'TASK',
+	EXECUTION: 'EXECUTION',
+	JOB: 'JOB',
 } as const;
 
 export type TaskType = (typeof TaskType)[keyof typeof TaskType];

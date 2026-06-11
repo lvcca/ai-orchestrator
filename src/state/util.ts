@@ -1,4 +1,4 @@
-import { redisGet, redisSet } from './state.ts';
+import { redisDelete, redisGet, redisSet } from './state.ts';
 import { Transaction, TaskType } from './types.ts';
 import { getLogger } from '../logger/logger.ts';
 
@@ -66,4 +66,56 @@ export const getJob = async (id: string) => {
 			`task type mismatch: requested ${TaskType.JOB} received: ${entry?.type}`,
 		);
 	return entry;
+};
+
+export const deleteTask = async (id: string) => {
+
+	try {
+		const entry = await redisGet(id);
+
+		switch (entry?.type) {
+			case TaskType.TASK:
+			case TaskType.TASK_DIRECT:
+				return await redisDelete(id);
+			
+			default:
+				throw new Error(
+					`task type mismatch: requested ${TaskType.TASK} || ${TaskType.TASK_DIRECT} received: ${entry?.type}`,
+				);
+		}
+
+	} catch(e) {
+		throw new Error(`could not find entry in deleteTask: error: ${e}`)
+	}
+
+};
+
+export const deleteExec = async (id: string) => {
+  try {
+    const entry = await redisGet(id);
+
+    if (!entry || entry?.type !== TaskType.EXECUTION)
+      throw new Error(
+        `task type mismatch: requested ${TaskType.EXECUTION} received: ${entry?.type}`,
+      );
+
+    return await redisDelete(id);
+  } catch (e) {
+    throw new Error(`could not find entry in deleteExec: error: ${e}`);
+  }
+};
+
+export const deleteJob = async (id: string) => {
+  try {
+    const entry = await redisGet(id);
+
+    if (!entry || entry?.type !== TaskType.JOB)
+      throw new Error(
+        `task type mismatch: requested ${TaskType.JOB} received: ${entry?.type}`,
+      );
+
+    return await redisDelete(id);
+  } catch (e) {
+    throw new Error(`could not find entry in deleteJob: error: ${e}`);
+  }
 };

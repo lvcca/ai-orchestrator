@@ -34,7 +34,7 @@ export const resolvePath = (userPath: string): string => {
 };
 
 // -------------------
-// TOOL FUNCTIONS
+// TOOL FUNCTIONS 
 // -------------------
 
 export const listDirectory = async (dirPath: string): Promise<string[]> => {
@@ -106,14 +106,13 @@ export const executeShell = async (command: string): Promise<ShellContext> => {
 	try {
 		const { stdout, stderr } = await execAsync(command);
 
-		shellContext.output = stdout;
 		shellContext.error = stderr || null;
+		shellContext.output = stdout ?? shellContext.error;
+
 	} catch (e) {
-		const msg = `something went wrong in executeShell ${JSON.stringify(e)} `;
-
+		const msg = `something went wrong in executeShell ${JSON.stringify(e, null, 2)} `;
+		if (!shellContext.error) shellContext.error = msg;
 		logger.error(msg);
-
-		shellContext.error = msg;
 	}
 
 	logger.debug(`shellContext: ${JSON.stringify(shellContext)}`);

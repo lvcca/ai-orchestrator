@@ -69,6 +69,17 @@ export const redisSet = async (tx: Transaction) => {
 	return successful;
 };
 
+export const redisDelete = async (id: string | string []) => {
+	const _ids = Array.isArray(id) ? id : [id]
+	
+	try {
+		const _connection = await getConnection();
+		return await _connection.del(_ids)
+	} catch (e) {
+		logger.error(`something went wrong in redisGet: ${e}`);
+	}
+};
+
 export const redisGetAll = async () => {
 	try {
 		const _connection = await getConnection();

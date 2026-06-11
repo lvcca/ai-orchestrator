@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getLogger } from '../logger/logger.ts';
 import { getHeader, run, taskInsert, validate } from './api_util.ts';
 import { TaskType } from '../state/types.ts';
-import { getExec } from '../state/util.ts';
+import { deleteExec, deleteJob, deleteTask, getExec } from '../state/util.ts';
 import { redisGet, redisGetAll } from '../state/state.ts';
 
 const logger = getLogger('api');
@@ -58,7 +58,12 @@ app.get('/task/newTask', async (req, res) => {
 	return res.status(200).send(llm_response);
 });
 
-app.get('/task/delete');
+app.get('/task/delete', async (req, res) => {
+	const id = getHeader(req,'id')
+	if (!id) res.status(400).send('invalid request')
+	const del = await deleteTask(id)
+	return res.status(200).send(`del response: ${del}`)
+});
 
 app.get('/exec/');
 app.get('/exec/allExec', async (_, res) => {
@@ -68,11 +73,22 @@ app.get('/exec/allExec', async (_, res) => {
 app.get('/exec/newExec', async (req, res) => {
 	const exec_id = await taskInsert(req, TaskType.EXECUTION);
 	const llm_response = await run(exec_id, TaskType.EXECUTION);
-
-	const validated = await validate(exec_id);
-	return res.status(200).send(llm_response);
+	const validatorResponse = await validate(exec_id);
+	
+	// if valid 
+	if (validatorResponse.valid) return res.status(200).send(llm_response);
+	
+	// if not valid
+	// TODO - pivot / branching
+	
+	
 });
-app.get('/exec/deleteExec');
+app.get('/exec/deleteExec', async (req, res) => {
+	const id = getHeader(req,'id')
+	if (!id) res.status(400).send('invalid request')
+	const del = await deleteExec(id)
+	return res.status(200).send(`del response: ${del}`)
+});
 
 app.get('/job/');
 app.get('/job/allJobs');
@@ -80,4 +96,9 @@ app.get('/job/newJob', async (req, res) => {
 	const successful = taskInsert(req, TaskType.JOB);
 	return res.status(200).send(successful);
 });
-app.get('/job/deleteJob');
+app.get('/job/deleteJob', async (req, res) => {
+	const id = getHeader(req,'id')
+	if (!id) res.status(400).send('invalid request')
+	const del = await deleteJob(id)
+	return res.status(200).send(`del response: ${del}`)
+});
