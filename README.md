@@ -14,8 +14,14 @@ git clone git@github.com:lvcca/ai-orchestrator.git;
 
 cd ai-orchestrator;
 
+# using docker container
 docker compose down;
 docker compose up --build --force-recreate;
+
+# OR if you're brave
+npm run ci
+npm build
+node ./dist/main.js
 ```
 
 ## Usage
@@ -25,7 +31,7 @@ fetch("http://localhost:8080/task/newTask", {
   method: "GET",
   headers: { 
     "Content-Type": "application/json", 
-    "task": "How should I go about starting a business?", 
+    "task": "Using only the FileSystemApi tools what groups exist on the machine ?", 
     "id": crypto.randomUUID()
   }
 })
@@ -34,7 +40,7 @@ fetch("http://localhost:8080/task/newTask", {
 ```shell
 curl -X GET "http://localhost:8080/task/newTask" \
   -H "Content-Type: application/json" \
-  -H "task: How should I go about starting a business?" \
+  -H "task: Using only the FileSystemApi tools what groups exist on the machine ?" \
   -H "id: 550e8400-e29b-41d4-a716-446655440000" 
 ```
 
