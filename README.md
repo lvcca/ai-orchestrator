@@ -19,8 +19,8 @@ docker compose down;
 docker compose up --build --force-recreate;
 
 # OR if you're brave
-npm run ci
-npm build
+npm ci
+npm run build
 node ./dist/main.js
 ```
 
