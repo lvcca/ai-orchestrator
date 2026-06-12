@@ -23,7 +23,7 @@ fetch("http://localhost:8080/task/newTask", {
   method: "GET",
   headers: { 
     "Content-Type": "application/json", 
-    "task": "Using only the FileSystemApi tools what groups exist on the machine ?", 
+    "task": "Using only the FileSystemApi tools or system commands list the files in the current directory .", 
     "id": crypto.randomUUID()
   }
 })
@@ -32,7 +32,7 @@ fetch("http://localhost:8080/task/newTask", {
 ```shell
 curl -X GET "http://localhost:8080/task/newTask" \
   -H "Content-Type: application/json" \
-  -H "task: Using only the FileSystemApi tools what groups exist on the machine ?" \
+  -H "task: Using only the FileSystemApi tools or system commands list the files in the current directory ." \
   -H "id: 550e8400-e29b-41d4-a716-446655440000" 
 ```
 
