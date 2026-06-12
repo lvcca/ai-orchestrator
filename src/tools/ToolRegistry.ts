@@ -1,4 +1,7 @@
+import { getLogger } from '../logger/logger.ts';
 import { Tool } from '../prompts/types/ApiToolChain.ts';
+
+const logger = getLogger('ToolRegistry')
 
 export type _func = (...args: any[]) => any;
 
@@ -16,7 +19,7 @@ export class ToolRegistry {
 			throw new Error(`Tool '${name}' is already registered`);
 
 		try {
-			console.log(
+			logger.info(
 				`registering tool name: ${name}, functype: ${typeof func}, func: ${func}, schema: ${schema}`,
 			);
 
@@ -30,9 +33,9 @@ export class ToolRegistry {
 
 			const sanityCheck = this._tools.get(name);
 
-			console.log(`tool sanity check func: ${sanityCheck?.func}`);
+			logger.info(`tool sanity check func: ${sanityCheck?.func}`);
 		} catch (e) {
-			console.error(`something went wrong in ToolRegistry register: ${e}`);
+			logger.error(`something went wrong in ToolRegistry register: ${e}`);
 		}
 	}
 
