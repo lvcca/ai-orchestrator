@@ -1,14 +1,32 @@
 import { getLogger } from '../logger/logger.ts';
-import { Tool } from '../prompts/types/ApiToolChain.ts';
 
 const logger = getLogger('ToolRegistry')
 
-export type _func = (...args: any[]) => any;
+export type _func = (...args: any[]) => Promise<string>;
 
 export type ToolEntry = {
 	readonly name: string;
 	readonly func: _func;
 	readonly schema?: string;
+};
+
+export const ToolExecutionWrapper = <
+    TArgs extends any[]
+>(
+    fn: (...args: TArgs) => Promise<string>
+) => {
+    return async (...args: TArgs): Promise<string> => {
+        let result = 'FAILED';
+
+        try {
+            result = await fn(...args);
+        }
+        catch (e) {
+            result = `FAILED: ${e instanceof Error ? e.message : String(e)}`;
+        }
+
+        return result;
+    };
 };
 
 export class ToolRegistry {

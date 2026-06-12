@@ -86,6 +86,7 @@ const EXECUTION_PROMPTS_FILE = './prompts/execution_prompts.md';
 const CHAT_PROMPTS_FILE = './prompts/chat_prompts.md';
 const TOOL_NARROWER_PROMPTS_FILE = './prompts/tool_narrower.md';
 const TASK_RESULTS_VALIDATOR = './prompts/task_validator.md';
+const TASK_RESULTS_SUMMARIZER = './prompts/task_summarizer.md';
 const SHELL_EXECUTOR_PROMPTS_FILE = './prompts/shell_executor_prompts.md';
 const SHELL_EXECUTOR_BRANCH_PROMPTS_FILE =
 	'./prompts/shell_executor_branch_prompts.md';
@@ -95,7 +96,8 @@ const SHELL_RESULTS_ANALYZER_PROMPTS_FILE =
 	'./prompts/shell_results_analyzer_prompts.md';
 const KARPATHY_GUIDELINES_PROMPTS_FILE =
 	'./prompts/karpathy_guidelines_prompts.md';
-
+const TASK_RESULT_JUNCTION_MANAGER = './prompts/junction_manager.md';
+	
 // types
 const TOOL_API_TYPE_FILE = './prompts/types/ApiToolChain.ts';
 const SHELL_EXECUTOR_TYPE_FILE = './prompts/types/ShellExecutor.ts';
@@ -113,6 +115,8 @@ export const PROMPTS = {
 	tool_narrower: await load_context(TOOL_NARROWER_PROMPTS_FILE),
 	task_result_validator: await load_context(TASK_RESULTS_VALIDATOR),
 	task_result_validator_type: await load_context(TASK_RESULTS_VALIDATOR_TYPES),
+	task_result_junction_manager: await load_context(TASK_RESULT_JUNCTION_MANAGER),
+	task_result_summarizer: await load_context(TASK_RESULTS_SUMMARIZER),
 	// aux
 	tool_types: await load_context(TOOL_API_TYPE_FILE),
 	karpathy_guidelines: await load_context(KARPATHY_GUIDELINES_PROMPTS_FILE),
@@ -208,6 +212,22 @@ export const call_llm_shell_branch_simplifier = async (prompt: string) => {
 
 export const call_llm_task_validator = async (prompt: string) => {
 	const withContext = PROMPTS['task_result_validator'] + prompt;
+	const res = await call_LLM(withContext);
+	if (!res) throw new Error(`did not receive response from llm: ${res}`);
+
+	return res;
+};
+
+export const call_llm_task_result_junction_manager = async (prompt: string) => {
+	const withContext = PROMPTS['task_result_junction_manager'] + prompt;
+	const res = await call_LLM(withContext);
+	if (!res) throw new Error(`did not receive response from llm: ${res}`);
+
+	return res;
+};
+
+export const call_llm_task_summarizer = async (prompt: string) => {
+	const withContext = PROMPTS['task_result_summarizer'] + prompt;
 	const res = await call_LLM(withContext);
 	if (!res) throw new Error(`did not receive response from llm: ${res}`);
 

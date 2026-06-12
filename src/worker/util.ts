@@ -2,15 +2,17 @@ import {
 	call_llm_data_narrower,
 	call_llm_shell_branch_analyzer,
 	call_llm_shell_branch_simplifier,
+	call_llm_task_summarizer,
 	PROMPTS,
 } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
-import { Parameter, Tool_Output } from '../prompts/types/ApiToolChain.ts';
+import { Parameter, Tool, Tool_Output } from '../prompts/types/ApiToolChain.ts';
+import { StandardStreams } from '../prompts/types/ShellExecutor.ts';
 import { redisGet } from '../state/state.ts';
-import { Status, TaskType } from '../state/types.ts';
+import { Status, TaskType, Transaction } from '../state/types.ts';
 import { getTask, setJob, setTask } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
-import { _func, ToolEntry } from '../tools/ToolRegistry.ts';
+import { _func, ToolEntry, ToolExecutionWrapper } from '../tools/ToolRegistry.ts';
 import crypto from 'node:crypto';
 
 const logger = getLogger('worker_util');
@@ -78,11 +80,29 @@ export const updatePrompt = async (
 	});
 };
 
+export const execWrapper = async (func: _func, args: string []) => {
+	let result: string;
+
+	try{
+		result = await func(...args)
+		if (result === undefined) result = `${func.name} call returned undefined, assume successful execution`
+	}
+
+	catch(e){
+		const msg = `something went wrong in execWrapper: ${getError(e)}`
+		logger.error(msg)
+		result = msg
+	}
+
+	return result
+}
+
 const SafeExecute = async (
 	key: string,
 	tool: ToolEntry,
 	Params: Parameter[],
 ) => {
+
 	if (!tool.func)
 		throw new Error(
 			`something went wrong in SafeExecute, tool: ${JSON.stringify(tool)} `,
@@ -97,44 +117,61 @@ const SafeExecute = async (
 	});
 
 	try {
+
 		await setJob({
 			id: key,
 			status: { status: Status.RUNNING, message: 'Preparing to execute' },
 		});
 
 		const func = tool.func;
-		const params = Params.map((p) => {
-			return {
-				...p,
-			}.value;
-		});
+		const params = Params.map((p) => p.value);
 
-		logger.info(`params: ${JSON.stringify(params)}`);
+		logger.info(`func: ${func.name}, params: ${JSON.stringify(params)}`);
 
-		result = await func(...params);
+		// result = await func(...params);
+		result = await execWrapper(func, params);
+
+		logger.info(`func results: ${JSON.stringify(result)}`);
 
 		switch (true) {
+			case result === undefined:
+			case result === null:
+				throw new Error(`no result returned from func call in SafeExecute`)
+				
 			case typeof result === 'string':
 				validResult = result;
 				break;
-			default: {
+			
+			case typeof result === 'object': {
+				const _result: StandardStreams = result as StandardStreams
+
+				if (!_result.input) break;
+
+				logger.info('is a shell result type');
+
+				// get arrays
 				const keys = Object.keys(result as any);
 				const vals = Object.values(result as any);
-				// type check
+
+				// find keys
 				const output = keys.findIndex((k) => k === 'output');
 				const error = keys.findIndex((k) => k === 'error');
 				const input = keys.findIndex((k) => k === 'input');
 
 				if (output > -1 && error > -1 && input > -1) {
-					logger.info('is a shell result type');
-
+					
+					// map to vals
 					const _input = vals[input] as string;
 					const _output = vals[output] as string;
 					const _error = vals[error] as string;
 
-					validResult = _output || _error || _input; // placeholder failsafe
+					validResult = _output || _error || _input || '[*] no response from shell, assume exited successfully'; // placeholder failsafe
 				}
 			}
+
+			default: 
+				logger.warn(`no case found for result ${JSON.stringify(result)}, result type: ${typeof result}`);
+			
 		}
 
 		await setJob({
@@ -145,11 +182,13 @@ const SafeExecute = async (
 			},
 		});
 
-		logger.info(`[*] SafeExecute result: ${JSON.stringify(result)}`);
+		logger.info(`[*] SafeExecute result: ${JSON.stringify(result)}, validResult: ${validResult}`);
 
 		return validResult;
+
 	} catch (e) {
-		const msg = `something went wrong in safe_execute: ${JSON.stringify(e)}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`;
+		
+		const msg = `something went wrong in SafeExecute: ${JSON.stringify(getError(e))}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`;
 
 		await setJob({
 			id: key,
@@ -162,8 +201,14 @@ const SafeExecute = async (
 		logger.error(msg);
 	}
 
-	return `${result}`;
+	return validResult;
+
 };
+
+export const getError = (e: unknown) => {
+	const error = e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : String(e);
+	return error;
+}
 
 const addJobToTask = async (task_id: string, job_id: string) => {
 	const entry = await redisGet(task_id);
@@ -226,16 +271,30 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 				await addJobToTask(task_id, job_id);
 
 				// @ts-ignore
-				const tool: string = step['Tool'] as string; // TODO - fix me
+				let tool: unknown = step['Tool']; 
+
+				if (typeof tool !== 'string') {
+					let _tool = tool as Tool;
+
+					let test: Tool = {
+						name: _tool['name'] ?? '',
+						description: _tool['description'] ?? '',
+						parameters: _tool['parameters'] ?? [],
+						return: _tool['return']
+					}
+
+					tool = test.name;
+				}
+
 				const params = step.Params ?? [];
 
 				logger.info(
-					`identified tool: ${tool}, params: ${JSON.stringify(params)}`,
+					`identified tool: ${JSON.stringify(tool)}, params: ${JSON.stringify(params)}`,
 				);
 
-				const found_tool: ToolEntry | undefined = registry.get(tool);
+				const found_tool: ToolEntry | undefined = registry.get(tool as string);
 
-				if (!found_tool) throw new Error(`could not find tool ${tool}`);
+				if (!found_tool) throw new Error(`could not find tool ${JSON.stringify(tool)}`);
 
 				const result = await SafeExecute(job_id, found_tool, params);
 
@@ -455,3 +514,53 @@ Expected Output Format:
 
 	return final_results;
 };
+
+export const summarize = async (id: string) => {
+	type summaryType = {
+		"status": "success" | "failure" | "partial_success" | "unknown",
+		"summary": string,
+		"result": string,
+		"error": string,
+		"steps": string [],
+		"artifacts": string []
+	}
+
+	const currObj = await redisGet(id)
+	const _obj = JSON.stringify(currObj)
+
+	const summarizer = await call_llm_task_summarizer(`
+You are an ai task result summarizer.
+
+Your job is to parse results and determine a definitive next step is required.
+
+Initial Tasks:
+${currObj?.prompt?.userRequest}
+
+Task Results:
+${currObj?.result}
+
+Full Task Stringified Object:
+${JSON.stringify(JSON.parse(_obj) as Transaction, null, 2)}
+
+RULES:
+- Return ONLY valid JSON
+- Do not explain reasoning
+- Do not include markdown
+- Use at most 5 steps
+- Steps must be concrete and actionable
+
+OUTPUT FORMAT:
+<LLM_RESPONSE>
+{
+	"status": "success" | "failure" | "partial_success" | "unknown",
+	"summary": string,
+	"result": string,
+	"error": string,
+	"steps": string [],
+	"artifacts": string []
+}
+</LLM_RESPONSE>
+`)
+	const summary = parseJsonSafe<summaryType>(extractResponseBlock(summarizer))
+	return summary
+}

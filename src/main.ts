@@ -8,6 +8,6 @@ import './tools/ToolBootstrap.ts';
 const logger = getLogger('main');
 
 app.listen(port, () => {
-	logger.info(`registered tools: ${JSON.stringify(registry.listTools())}`);
+	logger.info(`found schemas: ${JSON.stringify(registry.listSchemas())}, registered tools: ${JSON.stringify(registry.listTools())}`);
 	logger.info(`Server started on port ${port}, env: ${JSON.stringify(_env)}`);
 });

@@ -2,9 +2,10 @@ import { app } from '../server/server.ts';
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '../logger/logger.ts';
 import { getHeader, run, taskInsert, validate } from './api_util.ts';
-import { TaskType } from '../state/types.ts';
+import { TaskType, } from '../state/types.ts';
 import { deleteExec, deleteJob, deleteTask, getExec } from '../state/util.ts';
 import { redisGet, redisGetAll } from '../state/state.ts';
+import { summarize } from '../worker/util.ts';
 
 const logger = getLogger('api');
 
@@ -74,14 +75,14 @@ app.get('/exec/newExec', async (req, res) => {
 	const exec_id = await taskInsert(req, TaskType.EXECUTION);
 	const llm_response = await run(exec_id, TaskType.EXECUTION);
 	const validatorResponse = await validate(exec_id);
+
+	const currObj = await getExec(exec_id);
+	const _obj = JSON.stringify(currObj)
 	
-	// if valid 
-	if (validatorResponse.valid) return res.status(200).send(llm_response);
+	const summary = await summarize(exec_id)
 	
-	// if not valid
-	// TODO - pivot / branching
-	else return res.status(200).send(llm_response); //tmp
-	
+	return res.status(200).send(JSON.stringify(summary));
+
 });
 app.get('/exec/deleteExec', async (req, res) => {
 	const id = getHeader(req,'id')

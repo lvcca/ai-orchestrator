@@ -1,7 +1,6 @@
 // filesystem.ts
 
 import fs from 'fs/promises';
-import { createReadStream } from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -37,78 +36,120 @@ export const resolvePath = (userPath: string): string => {
 // TOOL FUNCTIONS 
 // -------------------
 
-export const listDirectory = async (dirPath: string): Promise<string[]> => {
-	return fs.readdir(resolvePath(dirPath));
-};
+export const list_directory = async (dirPath: string): Promise<string> => (await fs.readdir(resolvePath(dirPath))).join(',');
 
-export const readFile = (filePath: string): Promise<string> => {
+export const read_file = (filePath: string): Promise<string> => {
 	return fs.readFile(resolvePath(filePath), 'utf8');
 };
 
-export const writeFile = async (
+export const write_file = async (
 	filePath: string,
 	content: string,
-): Promise<void> => {
-	return fs.writeFile(resolvePath(filePath), content, 'utf8');
+): Promise<string> => {
+	let success = 'FAILED'
+	try{
+		await fs.writeFile(resolvePath(filePath), content, 'utf8');
+		success = `write_file: ${resolvePath(filePath)} SUCCESS!`
+	}
+	catch(_){}
+
+	return success
 };
 
-export const appendFile = async (
+export const append_file = async (
 	filePath: string,
 	content: string,
-): Promise<void> => {
-	return fs.appendFile(resolvePath(filePath), content, 'utf8');
+): Promise<string> => {
+	let success = 'FAILED'
+
+	try{ 
+		await fs.appendFile(resolvePath(filePath), content, 'utf8');
+		success = `append_file: ${resolvePath(filePath)} SUCCESS!`
+	}
+	catch(_){}
+
+	return success
 };
 
-export const createDirectory = async (
+export const create_directory = async (
 	dirPath: string,
-): Promise<string | undefined> => {
-	return fs.mkdir(resolvePath(dirPath), { recursive: true });
+): Promise<string> => {
+
+	let success = 'FAILED'
+
+	try{ 
+		await fs.mkdir(resolvePath(dirPath), { recursive: true });
+		success = `create_directory: ${resolvePath(dirPath)} SUCCESS!`
+	}
+	catch(_){}
+
+	return success
 };
 
-export const moveFile = async (src: string, dst: string): Promise<void> => {
-	return await fs.rename(resolvePath(src), resolvePath(dst));
+export const move_file = async (src: string, dst: string): Promise<string> => {
+	let success = 'FAILED'
+
+	try{ 
+		await fs.rename(resolvePath(src), resolvePath(dst));
+		success = `move_file: (src: ${resolvePath(src)}, dst: ${resolvePath(dst)}) SUCCESS!`
+	}
+	catch(_){}
+
+	return success
 };
 
-export const copyFile = async (src: string, dst: string): Promise<void> => {
-	return fs.copyFile(resolvePath(src), resolvePath(dst));
+export const copy_file = async (src: string, dst: string): Promise<string> => {
+	let success = 'FAILED'
+
+	try{ 
+		await fs.copyFile(resolvePath(src), resolvePath(dst));
+		success = `copy_file: (src: ${resolvePath(src)}, dst: ${resolvePath(dst)}) SUCCESS!`
+	}
+	catch(_){}
+
+	return success
 };
 
-export const deleteFile = (filePath: string): Promise<void> => {
-	return fs.unlink(resolvePath(filePath));
+export const delete_file = async (filePath: string): Promise<string> => {
+	let success = 'FAILED'
+
+	try { 
+		await fs.unlink(resolvePath(filePath));
+		success = `copy_file: (path: ${resolvePath(filePath)}) SUCCESS!`
+	}
+	catch(_){}
+
+	return success
 };
 
-export const fileExists = async (filePath: string): Promise<boolean> => {
+export const file_exists = async (filePath: string): Promise<string> => {
 	try {
 		const stat = await fs.stat(resolvePath(filePath));
-		return stat.isFile();
+		return String(stat.isFile());
 	} catch {
-		return false;
+		return String(false);
 	}
 };
 
-export const currentWorkingDirectory = async (): Promise<string> => {
-	return process.cwd();
-};
+export const currentWorkingDirectory = async (): Promise<string> => process.cwd();
 
 export interface ShellContext {
 	input: string;
-	output: string | null;
-	error: string | null;
+	output?: string;
+	error?: string;
 }
 
-export const executeShell = async (command: string): Promise<ShellContext> => {
+export const execute_shell = async (command: string): Promise<string> => {
 	const shellContext: ShellContext = {
 		input: command,
-		output: null,
-		error: null,
+		output: undefined,
+		error: undefined,
 	};
 
 	try {
 		const { stdout, stderr } = await execAsync(command);
-
-		shellContext.error = stderr || null;
-		shellContext.output = stdout ?? shellContext.error;
-
+		shellContext.error = stderr;
+		shellContext.output = stdout;
 	} catch (e) {
 		const msg = `something went wrong in executeShell ${JSON.stringify(e, null, 2)} `;
 		if (!shellContext.error) shellContext.error = msg;
@@ -117,13 +158,13 @@ export const executeShell = async (command: string): Promise<ShellContext> => {
 
 	logger.debug(`shellContext: ${JSON.stringify(shellContext)}`);
 
-	return shellContext;
+	return JSON.stringify(shellContext);
 };
 
-export const searchFiles = async (
+export const search_files = async (
 	directory: string,
 	pattern = '*',
-): Promise<string[]> => {
+): Promise<string> => {
 	const resolved = resolvePath(directory);
 
 	const entries = await fs.readdir(resolved);
@@ -146,22 +187,8 @@ export const searchFiles = async (
 		}
 	}
 
-	return results;
+	return results.join(',');
 };
-
-export async function* readTextChunks(
-	filePath: string,
-	chunkSize = 1024,
-): AsyncGenerator<string> {
-	const stream = createReadStream(resolvePath(filePath), {
-		encoding: 'utf8',
-		highWaterMark: chunkSize,
-	});
-
-	for await (const chunk of stream) {
-		yield chunk;
-	}
-}
 
 // -------------------
 // REGISTRATION ENTRYPOINT
@@ -173,17 +200,17 @@ export function RegisterTools(registry: ToolRegistry): void {
 		currentWorkingDirectory,
 		'filesystem',
 	);
-
-	registry.register('list_directory', listDirectory, 'filesystem');
-	registry.register('read_file', readFile, 'filesystem');
-	registry.register('write_file', writeFile, 'filesystem');
-	registry.register('append_file', appendFile, 'filesystem');
-	registry.register('create_directory', createDirectory, 'filesystem');
-	registry.register('move_file', moveFile, 'filesystem');
-	registry.register('copy_file', copyFile, 'filesystem');
-	registry.register('delete_file', deleteFile, 'filesystem');
-	registry.register('file_exists', fileExists, 'filesystem');
-	registry.register('search_files', searchFiles, 'filesystem');
-	registry.register('read_text_chunks', readTextChunks, 'filesystem');
-	registry.register('execute_shell', executeShell, 'filesystem');
+	
+	registry.register('list_directory', list_directory, 'filesystem');
+	registry.register('read_file', read_file, 'filesystem');
+	registry.register('write_file', write_file, 'filesystem');
+	registry.register('append_file', append_file, 'filesystem');
+	registry.register('create_directory', create_directory, 'filesystem');
+	registry.register('move_file', move_file, 'filesystem');
+	registry.register('copy_file', copy_file, 'filesystem');
+	registry.register('delete_file', delete_file, 'filesystem');
+	registry.register('file_exists', file_exists, 'filesystem');
+	registry.register('search_files', search_files, 'filesystem');
+	// registry.register('read_text_chunks', read_text_chunks, 'filesystem');
+	registry.register('execute_shell', execute_shell, 'filesystem');
 }
