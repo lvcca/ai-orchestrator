@@ -101,22 +101,23 @@ export const resolveRelated = async (related?: Related) => {
 };
 
 export const validate = async (id?: string) => {
-	logger.info(`in validate`);
+	logger.info(`validating transaction: ${id}`);
 
 	if (!id) throw new Error(`validate requires a valid id... id: ${id}`);
 	const entry = await redisGet(id);
 	if (!entry) throw new Error(`could not find valid entry: id: ${id}`);
 
-	const res = entry.result;
-	const prompt = entry.prompt;
-	const related = entry.related;
+	logger.info(`found entry: ${JSON.stringify(entry)}`);
+
+	const {result, prompt, related} = entry
+
 	const task = entry.prompt?.userRequest;
 
-	let result: string;
+	let _result: string;
 
-	logger.info(`res: ${res}, prompt: ${JSON.stringify(prompt)}`);
+	logger.info(`res: ${result}, prompt: ${JSON.stringify(prompt)}`);
 
-	result = await call_llm_task_validator(`
+	_result = await call_llm_task_validator(`
 You are an Execution agent manager.
 
 Your job is to take results from a task and determine whether or not the task goal was accomplished.
@@ -125,7 +126,7 @@ Initial Task(s):
 ${JSON.stringify(task)}
 
 Task Result:
-${JSON.stringify(res)}
+${JSON.stringify(result)}
 
 Related Tasks:
 ${JSON.stringify(await resolveRelated(related))}
@@ -153,9 +154,9 @@ Output FORMAT:
 </LLM_RESPONSE>
 	`);
 
-	logger.debug(`Task Validator Result: ${result}`);
+	logger.debug(`Task Validator Result: ${_result}`);
 
-	const responseBlock = extractResponseBlock(result);
+	const responseBlock = extractResponseBlock(_result);
 	if (!responseBlock)
 		throw new Error(`invalid response from validator: ${responseBlock}`);
 

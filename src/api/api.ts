@@ -80,7 +80,7 @@ app.get('/exec/newExec', async (req, res) => {
 	
 	// if not valid
 	// TODO - pivot / branching
-	
+	else return res.status(200).send(llm_response); //tmp
 	
 });
 app.get('/exec/deleteExec', async (req, res) => {

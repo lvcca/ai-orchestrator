@@ -14,8 +14,8 @@ const client: RedisClientType = createClient({
 
 let connection: RedisClientType<RedisDefaultModules, {}, {}, 3, {}> | undefined;
 
-client.on('error', (err: Error) => console.error('Redis Client Error:', err));
-client.on('connect', () => console.log('Redis Client Connected!'));
+client.on('error', (err: Error) => logger.error('Redis Client Error:', err));
+client.on('connect', () => logger.info('Redis Client Connected!'));
 
 export const getConnection = async () => {
 	try {
@@ -30,14 +30,10 @@ export const getConnection = async () => {
 export const redisSet = async (tx: Transaction) => {
 	let successful = false;
 
-	logger.debug(`in redisSet`);
-
 	try {
 		const _connection = await getConnection();
-		logger.debug(`got connection`);
 
 		let _new_entry = structuredClone(tx);
-		logger.debug(`cloned`);
 
 		// get current val if exists
 		if (await redisExists(tx.id)) {
@@ -54,11 +50,9 @@ export const redisSet = async (tx: Transaction) => {
 			JSON.stringify(_new_entry),
 		);
 
-		logger.debug(`saved...`);
-
 		//
 		logger.debug(
-			`saved status: ${saved_status}, value: ${JSON.stringify(_new_entry)}`,
+			`redisSet, saved status: ${saved_status}, value: ${JSON.stringify(_new_entry)}`,
 		);
 
 		successful = true;

@@ -3,25 +3,17 @@
 
 ## Overview
 
-A light ai-orchestrator written in Typescript.
+a light ai-orchestrator written in typescript.
 
 ## Installation
-
-To install simply run the following command in your terminal:
 
 ```bash
 git clone git@github.com:lvcca/ai-orchestrator.git;
 
 cd ai-orchestrator;
 
-# using docker container
 docker compose down;
 docker compose up --build --force-recreate;
-
-# OR if you're brave
-npm ci
-npm run build
-node ./dist/main.js
 ```
 
 ## Usage
@@ -60,4 +52,4 @@ ai-orchestrator is released under the [MIT License](https://opensource.org/licen
 
 ## Issues
 
-If you encounter any issues or have questions about using AI-Agents, please submit an issue on our GitHub repository.
+If you encounter any issues or have questions about using ai-orchestrator, please submit an issue on our GitHub repository.
