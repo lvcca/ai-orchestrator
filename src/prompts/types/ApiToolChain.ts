@@ -17,7 +17,7 @@ export type Tool = {
 	name: string;
 	description: string;
 	parameters: Parameter[];
-	return?: Parameter;
+	return: Parameter;
 };
 
 export type ToolEntry = {

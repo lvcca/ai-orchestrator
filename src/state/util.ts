@@ -69,7 +69,6 @@ export const getJob = async (id: string) => {
 };
 
 export const deleteTask = async (id: string) => {
-
 	try {
 		const entry = await redisGet(id);
 
@@ -77,45 +76,43 @@ export const deleteTask = async (id: string) => {
 			case TaskType.TASK:
 			case TaskType.TASK_DIRECT:
 				return await redisDelete(id);
-			
+
 			default:
 				throw new Error(
 					`task type mismatch: requested ${TaskType.TASK} || ${TaskType.TASK_DIRECT} received: ${entry?.type}`,
 				);
 		}
-
-	} catch(e) {
-		throw new Error(`could not find entry in deleteTask: error: ${e}`)
+	} catch (e) {
+		throw new Error(`could not find entry in deleteTask: error: ${e}`);
 	}
-
 };
 
 export const deleteExec = async (id: string) => {
-  try {
-    const entry = await redisGet(id);
+	try {
+		const entry = await redisGet(id);
 
-    if (!entry || entry?.type !== TaskType.EXECUTION)
-      throw new Error(
-        `task type mismatch: requested ${TaskType.EXECUTION} received: ${entry?.type}`,
-      );
+		if (!entry || entry?.type !== TaskType.EXECUTION)
+			throw new Error(
+				`task type mismatch: requested ${TaskType.EXECUTION} received: ${entry?.type}`,
+			);
 
-    return await redisDelete(id);
-  } catch (e) {
-    throw new Error(`could not find entry in deleteExec: error: ${e}`);
-  }
+		return await redisDelete(id);
+	} catch (e) {
+		throw new Error(`could not find entry in deleteExec: error: ${e}`);
+	}
 };
 
 export const deleteJob = async (id: string) => {
-  try {
-    const entry = await redisGet(id);
+	try {
+		const entry = await redisGet(id);
 
-    if (!entry || entry?.type !== TaskType.JOB)
-      throw new Error(
-        `task type mismatch: requested ${TaskType.JOB} received: ${entry?.type}`,
-      );
+		if (!entry || entry?.type !== TaskType.JOB)
+			throw new Error(
+				`task type mismatch: requested ${TaskType.JOB} received: ${entry?.type}`,
+			);
 
-    return await redisDelete(id);
-  } catch (e) {
-    throw new Error(`could not find entry in deleteJob: error: ${e}`);
-  }
+		return await redisDelete(id);
+	} catch (e) {
+		throw new Error(`could not find entry in deleteJob: error: ${e}`);
+	}
 };

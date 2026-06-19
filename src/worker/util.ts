@@ -1,4 +1,5 @@
 import {
+	call_LLM,
 	call_llm_data_narrower,
 	call_llm_shell_branch_analyzer,
 	call_llm_shell_branch_simplifier,
@@ -12,22 +13,49 @@ import { redisGet } from '../state/state.ts';
 import { Status, TaskType, Transaction } from '../state/types.ts';
 import { getTask, setJob, setTask } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
-import { _func, ToolEntry, ToolExecutionWrapper } from '../tools/ToolRegistry.ts';
+import { _func, ToolEntry } from '../tools/ToolRegistry.ts';
 import crypto from 'node:crypto';
 
 const logger = getLogger('worker_util');
 
-export const parseJsonSafe = <T>(text: string): T => {
+export const parseJsonSafe = async <T>(
+	text: string,
+	retries?: number,
+): Promise<T> => {
 	logger.debug(`parseJsonSafe text: ${text}`);
 
 	try {
 		return JSON.parse(text) as T;
 	} catch {
-		throw new Error(`invalid json: ${text}`);
+		//
+		// throw new Error(`invalid json: ${text}`);
+		//
+
+		// 1. Create a dummy type that resolves your generic
+		type Expanded<T> = { [K in keyof T]: T[K] };
+
+		// 2. Wrap your generic type
+		type MyExpandedType = Expanded<T>;
+
+		// 3. Hover over 'MyExpandedType' in VS Code, or assign it to a
+		// string to see the expanded type structure in the error tooltip:
+		const debug = {} as MyExpandedType;
+
+		logger.info(
+			`debug expanded parseJsonSafeText Type ${JSON.stringify(debug)}`,
+		);
+
+		const reformed = await call_LLM(`
+You are a JSON repair tool manager. Your sole responsibility is to fix invalid json objects.
+
+${Object.keys(debug)}
+
+`);
+		throw new Error(`could not fix invalid json object: ${text}`);
 	}
 };
 
-export const extractResponseBlock = (text: string) => {
+export const extractResponseBlock = async (text: string) => {
 	const pattern = /<LLM_RESPONSE>([\s\S]*?)<\/LLM_RESPONSE>/;
 
 	const match = text.match(pattern);
@@ -39,7 +67,7 @@ export const extractResponseBlock = (text: string) => {
 		let validJson = false;
 
 		try {
-			parseJsonSafe(text);
+			await parseJsonSafe(text);
 			validJson = true;
 		} catch (e) {
 			logger.error(`extracted text was not valid json`);
@@ -55,23 +83,23 @@ export const extractResponseBlock = (text: string) => {
 	}
 };
 
-export const updatePrompt = async (
+export const updateTaskPrompt = async (
 	task_id: string,
-	status: Status,
-	task?: string,
-	plan?: string,
+	status?: Status,
+	newUserRequest?: string,
+	newLLMResponse?: string,
 ) => {
 	const currentTask = await getTask(task_id);
 
 	const currentReq = currentTask?.prompt?.userRequest ?? [];
 	const currentRes = currentTask?.prompt?.llmResponse ?? [];
 
-	if (task) currentReq.push(task);
-	if (plan) currentRes.push(plan);
+	if (newUserRequest && !currentReq.includes(newUserRequest)) currentReq.push(newUserRequest);
+	if (newLLMResponse && !currentRes.includes(newLLMResponse)) currentRes.push(newLLMResponse);
 
 	await setTask({
 		id: task_id,
-		status: { status },
+		status: currentTask?.status,
 		prompt: {
 			userRequest: currentReq,
 			llmResponse: currentRes,
@@ -80,29 +108,27 @@ export const updatePrompt = async (
 	});
 };
 
-export const execWrapper = async (func: _func, args: string []) => {
+export const execWrapper = async (func: _func, args: string[]) => {
 	let result: string;
 
-	try{
-		result = await func(...args)
-		if (result === undefined) result = `${func.name} call returned undefined, assume successful execution`
+	try {
+		result = await func(...args);
+		if (result === undefined)
+			result = `${func.name} call returned undefined, assume successful execution`;
+	} catch (e) {
+		const msg = `something went wrong in execWrapper: ${getError(e)}`;
+		logger.error(msg);
+		result = msg;
 	}
 
-	catch(e){
-		const msg = `something went wrong in execWrapper: ${getError(e)}`
-		logger.error(msg)
-		result = msg
-	}
-
-	return result
-}
+	return result;
+};
 
 const SafeExecute = async (
 	key: string,
 	tool: ToolEntry,
 	Params: Parameter[],
 ) => {
-
 	if (!tool.func)
 		throw new Error(
 			`something went wrong in SafeExecute, tool: ${JSON.stringify(tool)} `,
@@ -117,7 +143,6 @@ const SafeExecute = async (
 	});
 
 	try {
-
 		await setJob({
 			id: key,
 			status: { status: Status.RUNNING, message: 'Preparing to execute' },
@@ -136,14 +161,14 @@ const SafeExecute = async (
 		switch (true) {
 			case result === undefined:
 			case result === null:
-				throw new Error(`no result returned from func call in SafeExecute`)
-				
+				throw new Error(`no result returned from func call in SafeExecute`);
+
 			case typeof result === 'string':
 				validResult = result;
 				break;
-			
+
 			case typeof result === 'object': {
-				const _result: StandardStreams = result as StandardStreams
+				const _result: StandardStreams = result as StandardStreams;
 
 				if (!_result.input) break;
 
@@ -159,19 +184,23 @@ const SafeExecute = async (
 				const input = keys.findIndex((k) => k === 'input');
 
 				if (output > -1 && error > -1 && input > -1) {
-					
 					// map to vals
-					const _input = vals[input] as string;
-					const _output = vals[output] as string;
-					const _error = vals[error] as string;
+					const _input = `${vals[input]}` as string;
+					const _output = `${vals[output]}` as string;
+					const _error = `${vals[error]}` as string;
 
-					validResult = _output || _error || _input || '[*] no response from shell, assume exited successfully'; // placeholder failsafe
+					validResult =
+						_output ||
+						_error ||
+						_input ||
+						'[*] no response from shell, assume exited successfully'; // placeholder failsafe
 				}
 			}
 
-			default: 
-				logger.warn(`no case found for result ${JSON.stringify(result)}, result type: ${typeof result}`);
-			
+			default:
+				logger.warn(
+					`no case found for result ${JSON.stringify(result)}, result type: ${typeof result}`,
+				);
 		}
 
 		await setJob({
@@ -182,12 +211,12 @@ const SafeExecute = async (
 			},
 		});
 
-		logger.info(`[*] SafeExecute result: ${JSON.stringify(result)}, validResult: ${validResult}`);
+		logger.info(
+			`[*] SafeExecute result: ${JSON.stringify(result)}, validResult: ${validResult}`,
+		);
 
 		return validResult;
-
 	} catch (e) {
-		
 		const msg = `something went wrong in SafeExecute: ${JSON.stringify(getError(e))}, tool: ${JSON.stringify(tool)}, Params: ${JSON.stringify(Params)}`;
 
 		await setJob({
@@ -202,18 +231,18 @@ const SafeExecute = async (
 	}
 
 	return validResult;
-
 };
 
 export const getError = (e: unknown) => {
-	const error = e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : String(e);
+	const error =
+		e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : String(e);
 	return error;
-}
+};
 
 const addJobToTask = async (task_id: string, job_id: string) => {
-	const entry = await redisGet(task_id);
-	const currPrompt = entry?.prompt;
 	let saved = false;
+
+	const entry = await redisGet(task_id);
 	const related = entry?.related;
 
 	const jobs = related?.job ?? [];
@@ -237,6 +266,7 @@ const addJobToTask = async (task_id: string, job_id: string) => {
 		default:
 			logger.warn(`no case found for ${entry?.type} in addJobToTask..`);
 	}
+
 	return saved;
 };
 
@@ -249,62 +279,75 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 		const steps = task.identified_internal_tools_required;
 
 		for (const step of steps) {
-			if (pivotRequired) throw new Error('pivotRequired in branching!');
-			else {
-				// save job_id
-				const job_id = crypto.randomUUID();
-				jobs.set(job_id, undefined);
+			try {
+				if (pivotRequired) throw new Error('pivotRequired in branching!');
+				else {
+					// save job_id
+					const job_id = crypto.randomUUID();
+					jobs.set(job_id, undefined);
 
-				await setJob({
-					id: job_id,
-					type: TaskType.JOB,
-					related: {
-						task: [task_id],
-					},
-					job: JSON.stringify(step),
-					status: {
-						status: Status.QUEUED,
-					},
-				});
+					await setJob({
+						id: job_id,
+						type: TaskType.JOB,
+						related: {
+							task: [task_id],
+						},
+						job: JSON.stringify(step),
+						status: {
+							status: Status.QUEUED,
+						},
+					});
 
-				// add link to main task
-				await addJobToTask(task_id, job_id);
+					// add link to main task
+					await addJobToTask(task_id, job_id);
 
-				// @ts-ignore
-				let tool: unknown = step['Tool']; 
+					let tool: unknown = step['Tool'];
 
-				if (typeof tool !== 'string') {
-					let _tool = tool as Tool;
+					// try parse as tool first
+					if (typeof tool !== 'string') {
+						let _tool = tool as Tool;
 
-					let test: Tool = {
-						name: _tool['name'] ?? '',
-						description: _tool['description'] ?? '',
-						parameters: _tool['parameters'] ?? [],
-						return: _tool['return']
+						let test: Tool = {
+							name: _tool['name'] ?? '',
+							description: _tool['description'] ?? '',
+							parameters: _tool['parameters'] ?? [],
+							return: _tool['return'],
+						};
+
+						tool = test.name;
 					}
 
-					tool = test.name;
+					const params = step.Params ?? [];
+
+					logger.info(
+						`identified tool: ${JSON.stringify(tool)}, params: ${JSON.stringify(params)}`,
+					);
+
+					const found_tool: ToolEntry | undefined = registry.get(
+						tool as string,
+					);
+
+					if (!found_tool)
+						throw new Error(`could not find tool ${JSON.stringify(tool)}`);
+
+					const result = await SafeExecute(job_id, found_tool, params);
+
+					if (!result)
+						throw new Error(`no result came back from SafeExecute...`);
+
+					final_results = result;
 				}
-
-				const params = step.Params ?? [];
-
-				logger.info(
-					`identified tool: ${JSON.stringify(tool)}, params: ${JSON.stringify(params)}`,
+			} catch (e) {
+				logger.error(
+					`something went wrong in TaskProcessJob ${JSON.stringify(e)}`,
 				);
-
-				const found_tool: ToolEntry | undefined = registry.get(tool as string);
-
-				if (!found_tool) throw new Error(`could not find tool ${JSON.stringify(tool)}`);
-
-				const result = await SafeExecute(job_id, found_tool, params);
-
-				if (!result) throw new Error(`no result came back from SafeExecute...`);
-
-				final_results = result;
+				continue;
 			}
 		}
 	} catch (e) {
-		logger.error(`something went wrong in TaskProcessJob: ${e}`);
+		logger.error(
+			`something went wrong in TaskProcessJob: ${JSON.stringify(e)}`,
+		);
 	}
 
 	logger.info(`final results from process task util: ${final_results}`);
@@ -332,12 +375,12 @@ export const ToolExec = async (
 			`sanitize the following output: ${initial_exec}`,
 		);
 
-		const block = extractResponseBlock(narrowed);
+		const block = await extractResponseBlock(narrowed);
 
 		if (!block)
 			throw new Error(`no block found from narrowed response, block: ${block}`);
 
-		const json_response = parseJsonSafe<Tool_Output>(block);
+		const json_response = await parseJsonSafe<Tool_Output>(block);
 		const steps = json_response.identified_internal_tools_required;
 
 		if (!steps || (Array.isArray(steps) && steps.length < 1))
@@ -515,18 +558,18 @@ Expected Output Format:
 	return final_results;
 };
 
-export const summarize = async (id: string) => {
-	type summaryType = {
-		"status": "success" | "failure" | "partial_success" | "unknown",
-		"summary": string,
-		"result": string,
-		"error": string,
-		"steps": string [],
-		"artifacts": string []
-	}
+export type summaryType = {
+	status: 'success' | 'failure' | 'partial_success' | 'unknown';
+	summary: string;
+	result: string;
+	error: string;
+	steps: string[];
+	artifacts: string[];
+};
 
-	const currObj = await redisGet(id)
-	const _obj = JSON.stringify(currObj)
+export const summarize = async (id: string) => {
+	const currObj = await redisGet(id);
+	const _obj = JSON.stringify(currObj);
 
 	const summarizer = await call_llm_task_summarizer(`
 You are an ai task result summarizer.
@@ -560,7 +603,9 @@ OUTPUT FORMAT:
 	"artifacts": string []
 }
 </LLM_RESPONSE>
-`)
-	const summary = parseJsonSafe<summaryType>(extractResponseBlock(summarizer))
-	return summary
-}
+`);
+	const summary = await parseJsonSafe<summaryType>(
+		await extractResponseBlock(summarizer),
+	);
+	return summary;
+};

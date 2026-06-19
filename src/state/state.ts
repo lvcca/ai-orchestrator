@@ -38,6 +38,7 @@ export const redisSet = async (tx: Transaction) => {
 		// get current val if exists
 		if (await redisExists(tx.id)) {
 			const _existing_entry = await redisGet(tx.id);
+
 			_new_entry = {
 				..._existing_entry,
 				..._new_entry,
@@ -63,12 +64,12 @@ export const redisSet = async (tx: Transaction) => {
 	return successful;
 };
 
-export const redisDelete = async (id: string | string []) => {
-	const _ids = Array.isArray(id) ? id : [id]
-	
+export const redisDelete = async (id: string | string[]) => {
+	const _ids = Array.isArray(id) ? id : [id];
+
 	try {
 		const _connection = await getConnection();
-		return await _connection.del(_ids)
+		return await _connection.del(_ids);
 	} catch (e) {
 		logger.error(`something went wrong in redisGet: ${e}`);
 	}
@@ -81,7 +82,7 @@ export const redisGetAll = async () => {
 
 		if (!keys || keys.length < 1) throw new Error(`could not find entries..`);
 
-		return keys;
+		return structuredClone(keys);
 	} catch (e) {
 		logger.error(`something went wrong in redisGet: ${e}`);
 	}
@@ -95,7 +96,7 @@ export const redisGet = async (id: string) => {
 		if (!tx) throw new Error(`could not find entry with id: ${id}`);
 
 		const parsed: Transaction = JSON.parse(tx);
-		return parsed;
+		return structuredClone(parsed);
 	} catch (e) {
 		logger.error(`something went wrong in redisGet: ${e}`);
 	}

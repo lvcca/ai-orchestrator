@@ -1,6 +1,6 @@
 import { getLogger } from '../logger/logger.ts';
 
-const logger = getLogger('ToolRegistry')
+const logger = getLogger('ToolRegistry');
 
 export type _func = (...args: any[]) => Promise<string>;
 
@@ -10,23 +10,20 @@ export type ToolEntry = {
 	readonly schema?: string;
 };
 
-export const ToolExecutionWrapper = <
-    TArgs extends any[]
->(
-    fn: (...args: TArgs) => Promise<string>
+export const ToolExecutionWrapper = <TArgs extends any[]>(
+	fn: (...args: TArgs) => Promise<string>,
 ) => {
-    return async (...args: TArgs): Promise<string> => {
-        let result = 'FAILED';
+	return async (...args: TArgs): Promise<string> => {
+		let result = 'FAILED';
 
-        try {
-            result = await fn(...args);
-        }
-        catch (e) {
-            result = `FAILED: ${e instanceof Error ? e.message : String(e)}`;
-        }
+		try {
+			result = await fn(...args);
+		} catch (e) {
+			result = `FAILED: ${e instanceof Error ? e.message : String(e)}`;
+		}
 
-        return result;
-    };
+		return result;
+	};
 };
 
 export class ToolRegistry {

@@ -2,7 +2,7 @@ import { call_llm_chat, call_llm_tasks } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
 import { Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
-import { parseJsonSafe, updatePrompt } from './util.ts';
+import { parseJsonSafe, updateTaskPrompt } from './util.ts';
 
 const logger = getLogger('TaskWorker');
 
@@ -30,7 +30,7 @@ const revise_plan = async (
 	logger.info(`current task: ${task}`);
 	logger.info(`current plan: ${plan}`);
 
-	await updatePrompt(task_id, Status.RUNNING, task, plan);
+	await updateTaskPrompt(task_id, Status.RUNNING, task, plan);
 
 	const prompt = `You are a planning critic. You only have ${depth} number of attempts left to get this right.
 
@@ -73,7 +73,7 @@ ${{
 
 	logger.info(`response: ${raw}`);
 
-	const result = parseJsonSafe<TaskWorkerResultType>(raw);
+	const result = await parseJsonSafe<TaskWorkerResultType>(raw);
 
 	if (!result) return revise_plan(task_id, task, plan, depth - 1);
 
@@ -156,10 +156,10 @@ RULES:
 EXECUTION:
                 `);
 
-		await updatePrompt(task_id, Status.COMPLETED, task, plan);
+		await updateTaskPrompt(task_id, Status.COMPLETED, task, plan);
 	} catch (e) {
 		logger.error(`something went wrong in TaskWorker:run_agents: ${e}`);
-		await updatePrompt(task_id, Status.FAILED, task, plan);
+		await updateTaskPrompt(task_id, Status.FAILED, task, plan);
 	}
 
 	await setTask({

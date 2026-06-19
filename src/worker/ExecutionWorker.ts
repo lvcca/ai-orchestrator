@@ -1,9 +1,11 @@
+import { resolveRelated } from '../api/api_util.ts';
 import { call_llm_chat, call_llm_toolcall, PROMPTS } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
-import { Status } from '../state/types.ts';
+import { redisGet } from '../state/state.ts';
+import { Related, Status } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
-import { ToolExec } from './util.ts';
+import { ToolExec, updateTaskPrompt } from './util.ts';
 import crypto from 'node:crypto';
 
 const logger = getLogger('ExecutionWorker');
@@ -17,6 +19,11 @@ export const RunExec = async (
 		id: task_id,
 		status: { status: Status.RUNNING },
 	});
+
+	let related: Related | undefined;
+	const currObj = await redisGet(task_id);
+
+	related = currObj?.related;
 
 	let final_output: string = 'FAILED';
 
@@ -38,6 +45,9 @@ ${PROMPTS['tool_types']}
 TASK:
 ${task}
 
+Related Tasks:
+${JSON.stringify(await resolveRelated(related))}
+
 RULES:
 - Use ONLY valid JSON as output 
 - Always explain reasoning
@@ -49,12 +59,20 @@ RULES:
 ONLY ACCEPTABLE OUTPUT FORMAT:
 Tool_Output`);
 
-		const exec_id = crypto.randomUUID();
-		const tool_output = await ToolExec(exec_id, task, initial_exec);
+		// task execution env
+		const tool_task_id = crypto.randomUUID();
+		const tool_output = await ToolExec(tool_task_id, task, initial_exec);
 
 		// at this point tool should have executed...
+		if (typeof tool_output === 'string') {
+			final_output = tool_output;
 
-		if (typeof tool_output === 'string') final_output = tool_output;
+			await setTask({
+				id: task_id,
+				status: { status: Status.COMPLETED },
+				result: final_output,
+			});
+		}
 	} catch (e) {
 		logger.error(`something went wrong in RunExec: ${e}`);
 
@@ -64,12 +82,6 @@ Tool_Output`);
 			result: `${JSON.stringify(e)}`,
 		});
 	}
-
-	await setTask({
-		id: task_id,
-		status: { status: Status.COMPLETED },
-		result: final_output,
-	});
 
 	return final_output;
 };

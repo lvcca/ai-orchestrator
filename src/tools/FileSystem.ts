@@ -33,10 +33,11 @@ export const resolvePath = (userPath: string): string => {
 };
 
 // -------------------
-// TOOL FUNCTIONS 
+// TOOL FUNCTIONS
 // -------------------
 
-export const list_directory = async (dirPath: string): Promise<string> => (await fs.readdir(resolvePath(dirPath))).join(',');
+export const list_directory = async (dirPath: string): Promise<string> =>
+	(await fs.readdir(resolvePath(dirPath))).join(',');
 
 export const read_file = (filePath: string): Promise<string> => {
 	return fs.readFile(resolvePath(filePath), 'utf8');
@@ -46,80 +47,71 @@ export const write_file = async (
 	filePath: string,
 	content: string,
 ): Promise<string> => {
-	let success = 'FAILED'
-	try{
+	let success = 'FAILED';
+	try {
 		await fs.writeFile(resolvePath(filePath), content, 'utf8');
-		success = `write_file: ${resolvePath(filePath)} SUCCESS!`
-	}
-	catch(_){}
+		success = `write_file: ${resolvePath(filePath)} SUCCESS!`;
+	} catch (_) {}
 
-	return success
+	return success;
 };
 
 export const append_file = async (
 	filePath: string,
 	content: string,
 ): Promise<string> => {
-	let success = 'FAILED'
+	let success = 'FAILED';
 
-	try{ 
+	try {
 		await fs.appendFile(resolvePath(filePath), content, 'utf8');
-		success = `append_file: ${resolvePath(filePath)} SUCCESS!`
-	}
-	catch(_){}
+		success = `append_file: ${resolvePath(filePath)} SUCCESS!`;
+	} catch (_) {}
 
-	return success
+	return success;
 };
 
-export const create_directory = async (
-	dirPath: string,
-): Promise<string> => {
+export const create_directory = async (dirPath: string): Promise<string> => {
+	let success = 'FAILED';
 
-	let success = 'FAILED'
-
-	try{ 
+	try {
 		await fs.mkdir(resolvePath(dirPath), { recursive: true });
-		success = `create_directory: ${resolvePath(dirPath)} SUCCESS!`
-	}
-	catch(_){}
+		success = `create_directory: ${resolvePath(dirPath)} SUCCESS!`;
+	} catch (_) {}
 
-	return success
+	return success;
 };
 
 export const move_file = async (src: string, dst: string): Promise<string> => {
-	let success = 'FAILED'
+	let success = 'FAILED';
 
-	try{ 
+	try {
 		await fs.rename(resolvePath(src), resolvePath(dst));
-		success = `move_file: (src: ${resolvePath(src)}, dst: ${resolvePath(dst)}) SUCCESS!`
-	}
-	catch(_){}
+		success = `move_file: (src: ${resolvePath(src)}, dst: ${resolvePath(dst)}) SUCCESS!`;
+	} catch (_) {}
 
-	return success
+	return success;
 };
 
 export const copy_file = async (src: string, dst: string): Promise<string> => {
-	let success = 'FAILED'
+	let success = 'FAILED';
 
-	try{ 
+	try {
 		await fs.copyFile(resolvePath(src), resolvePath(dst));
-		success = `copy_file: (src: ${resolvePath(src)}, dst: ${resolvePath(dst)}) SUCCESS!`
-	}
-	catch(_){}
+		success = `copy_file: (src: ${resolvePath(src)}, dst: ${resolvePath(dst)}) SUCCESS!`;
+	} catch (_) {}
 
-	return success
+	return success;
 };
 
 export const delete_file = async (filePath: string): Promise<string> => {
-	let success = 'FAILED'
+	let success = 'FAILED';
 
-	try { 
+	try {
 		await fs.unlink(resolvePath(filePath));
-		success = `copy_file: (path: ${resolvePath(filePath)}) SUCCESS!`
-	}
-	catch(_){}
+		success = `copy_file: (path: ${resolvePath(filePath)}) SUCCESS!`;
+	} catch (_) {}
 
-	return success
+	return success;
 };
 
 export const file_exists = async (filePath: string): Promise<string> => {
@@ -131,7 +123,8 @@ export const file_exists = async (filePath: string): Promise<string> => {
 	}
 };
 
-export const currentWorkingDirectory = async (): Promise<string> => process.cwd();
+export const currentWorkingDirectory = async (): Promise<string> =>
+	process.cwd();
 
 export interface ShellContext {
 	input: string;
@@ -200,7 +193,7 @@ export function RegisterTools(registry: ToolRegistry): void {
 		currentWorkingDirectory,
 		'filesystem',
 	);
-	
+
 	registry.register('list_directory', list_directory, 'filesystem');
 	registry.register('read_file', read_file, 'filesystem');
 	registry.register('write_file', write_file, 'filesystem');
