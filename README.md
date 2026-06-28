@@ -32,7 +32,7 @@ fetch("http://localhost:8080/exec/newExec", {
 ```
 
 ```shell
-curl -X GET "http://localhost:8080/task/newTask" \
+curl -X GET "http://localhost:8080/exec/newExec" \
   -H "Content-Type: application/json" \
   -H "task: Using only the FileSystemApi tools or system commands list the files in the current directory ." \
   -H "id: 550e8400-e29b-41d4-a716-446655440000" 
