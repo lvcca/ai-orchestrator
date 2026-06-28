@@ -10,7 +10,7 @@ let _format = format.combine(
 	timestamp({ format: 'YY-MM-DD HH:MM:SS' }),
 	printf(
 		(info) =>
-			` ${info.timestamp}  ${String(info.level).toUpperCase()} : ${info.message}`,
+			` ${info.timestamp} ${info.filename} ${String(info.level).toUpperCase()} | ${info.message}`,
 	),
 );
 
@@ -21,9 +21,14 @@ addColors({
 	debug: 'bold white',
 });
 
+transports.ConsoleTransportOptions = {
+	debugStdout: true,
+	forceConsole: true,
+};
+
 const logger = createLogger({
 	level: 'debug',
-	transports: [new transports.Console()],
+	transports: new transports.Console(),
 	format: _format,
 });
 

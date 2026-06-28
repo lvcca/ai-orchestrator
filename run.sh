@@ -1,3 +1,4 @@
 npm ci;
-npm run build;
+rm -rf /app/dist
+npm run pipeline;
 node /app/dist/main.js;

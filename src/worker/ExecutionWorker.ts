@@ -1,27 +1,28 @@
 import { resolveRelated } from '../api/api_util.ts';
 import { call_llm_chat, call_llm_toolcall, PROMPTS } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
-import { redisGet } from '../state/state.ts';
-import { Related, Status } from '../state/types.ts';
-import { setTask } from '../state/util.ts';
+import { Related, Status, TaskType } from '../state/types.ts';
+import { getExec, setExec } from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
-import { ToolExec, updateTaskPrompt } from './util.ts';
+import { ToolExec, appendToTransactionLog } from './util.ts';
 import crypto from 'node:crypto';
 
 const logger = getLogger('ExecutionWorker');
 
 export const RunExec = async (
-	task_id: string,
+	exec_id: string,
 	task: string,
 	LLM_DIRECT: boolean,
 ) => {
-	await setTask({
-		id: task_id,
+	// set status
+	await setExec({
+		id: exec_id,
 		status: { status: Status.RUNNING },
 	});
 
 	let related: Related | undefined;
-	const currObj = await redisGet(task_id);
+	// get current
+	const currObj = await getExec(exec_id);
 
 	related = currObj?.related;
 
@@ -46,7 +47,7 @@ TASK:
 ${task}
 
 Related Tasks:
-${JSON.stringify(await resolveRelated(related))}
+${JSON.stringify(related)}
 
 RULES:
 - Use ONLY valid JSON as output 
@@ -59,25 +60,37 @@ RULES:
 ONLY ACCEPTABLE OUTPUT FORMAT:
 Tool_Output`);
 
+		await appendToTransactionLog({
+			_id: exec_id,
+			type: TaskType.EXECUTION,
+			newUserRequest: task,
+		});
+
 		// task execution env
-		const tool_task_id = crypto.randomUUID();
-		const tool_output = await ToolExec(tool_task_id, task, initial_exec);
+		const tool_exec_id = crypto.randomUUID();
+		const tool_output = await ToolExec(tool_exec_id, task, initial_exec);
 
 		// at this point tool should have executed...
 		if (typeof tool_output === 'string') {
 			final_output = tool_output;
 
-			await setTask({
-				id: task_id,
+			await setExec({
+				id: exec_id,
 				status: { status: Status.COMPLETED },
 				result: final_output,
+			});
+
+			await appendToTransactionLog({
+				_id: exec_id,
+				type: TaskType.EXECUTION,
+				newLLMResponse: final_output,
 			});
 		}
 	} catch (e) {
 		logger.error(`something went wrong in RunExec: ${e}`);
 
-		await setTask({
-			id: task_id,
+		await setExec({
+			id: exec_id,
 			status: { status: Status.FAILED },
 			result: `${JSON.stringify(e)}`,
 		});

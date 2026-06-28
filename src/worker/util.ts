@@ -10,8 +10,15 @@ import { getLogger } from '../logger/logger.ts';
 import { Parameter, Tool, Tool_Output } from '../prompts/types/ApiToolChain.ts';
 import { StandardStreams } from '../prompts/types/ShellExecutor.ts';
 import { redisGet } from '../state/state.ts';
-import { Status, TaskType, Transaction } from '../state/types.ts';
-import { getTask, setJob, setTask } from '../state/util.ts';
+import { Related, Status, TaskType, Transaction } from '../state/types.ts';
+import {
+	getExec,
+	getJob,
+	getTask,
+	setExec,
+	setJob,
+	setTask,
+} from '../state/util.ts';
 import { registry } from '../tools/ToolBootstrap.ts';
 import { _func, ToolEntry } from '../tools/ToolRegistry.ts';
 import crypto from 'node:crypto';
@@ -46,11 +53,11 @@ export const parseJsonSafe = async <T>(
 		);
 
 		const reformed = await call_LLM(`
-You are a JSON repair tool manager. Your sole responsibility is to fix invalid json objects.
+			You are a JSON repair tool manager. Your sole responsibility is to fix invalid json objects.
 
-${Object.keys(debug)}
+			${Object.keys(debug)}
 
-`);
+		`);
 		throw new Error(`could not fix invalid json object: ${text}`);
 	}
 };
@@ -83,29 +90,152 @@ export const extractResponseBlock = async (text: string) => {
 	}
 };
 
-export const updateTaskPrompt = async (
-	task_id: string,
-	status?: Status,
-	newUserRequest?: string,
-	newLLMResponse?: string,
-) => {
-	const currentTask = await getTask(task_id);
+export const updateRelated = async ({
+	_id,
+	type,
+	related,
+}: {
+	_id: string;
+	type: TaskType;
+	related: Related;
+}) => {
+	let success = false;
 
-	const currentReq = currentTask?.prompt?.userRequest ?? [];
-	const currentRes = currentTask?.prompt?.llmResponse ?? [];
+	try {
+		// get current state
+		let currEntry: Transaction | undefined;
 
-	if (newUserRequest && !currentReq.includes(newUserRequest)) currentReq.push(newUserRequest);
-	if (newLLMResponse && !currentRes.includes(newLLMResponse)) currentRes.push(newLLMResponse);
+		switch (type) {
+			case 'EXECUTION':
+				currEntry = await getExec(_id);
+				break;
+			case 'JOB':
+				currEntry = await getJob(_id);
+				break;
+			case 'TASK_DIRECT':
+			case 'TASK':
+				currEntry = await getTask(_id);
+				break;
+		}
 
-	await setTask({
-		id: task_id,
-		status: currentTask?.status,
-		prompt: {
+		if (!currEntry) throw new Error(`could not find entry... ${_id}`);
+
+		// update current state
+		const newJobs = related?.job;
+		if (newJobs)
+			for (let i = 0; i < newJobs?.length; i++)
+				if (!currEntry.related?.job?.includes(newJobs[i]))
+					currEntry.related?.job?.push(newJobs[i]);
+
+		const newExecs = related?.exec;
+		if (newExecs)
+			for (let i = 0; i < newExecs?.length; i++)
+				if (!currEntry.related?.exec?.includes(newExecs[i]))
+					currEntry.related?.exec?.push(newExecs[i]);
+
+		const newTask = related?.task;
+		if (newTask)
+			for (let i = 0; i < newTask?.length; i++)
+				if (!currEntry.related?.exec?.includes(newTask[i]))
+					currEntry.related?.exec?.push(newTask[i]);
+
+		switch (type) {
+			case 'EXECUTION':
+				success = await setExec(currEntry);
+				break;
+			case 'JOB':
+				success = await setJob(currEntry);
+				break;
+			case 'TASK_DIRECT':
+			case 'TASK':
+				success = await setTask(currEntry);
+				break;
+		}
+	} catch (e) {
+		logger.error(`something went wrong in updateRelated ${e}`);
+	}
+
+	return success;
+};
+
+export const appendToTransactionLog = async ({
+	_id,
+	type,
+	newUserRequest,
+	newLLMResponse,
+}: {
+	_id: string;
+	type: TaskType;
+	//
+	newUserRequest?: string;
+	newLLMResponse?: string;
+}) => {
+	let success = false;
+	try {
+		let currTx: Transaction | undefined;
+
+		switch (type) {
+			case 'TASK':
+			case 'TASK_DIRECT':
+				currTx = await getTask(_id);
+				break;
+			case 'EXECUTION':
+				currTx = await getExec(_id);
+				break;
+			case 'JOB':
+				currTx = await getJob(_id);
+				break;
+		}
+
+		if (!currTx) throw new Error(`no tx found!`);
+
+		const currentReq = [...(currTx?.prompt?.userRequest ?? [])];
+		const currentRes = [...(currTx?.prompt?.llmResponse ?? [])];
+
+		if (newUserRequest && !currentReq.includes(newUserRequest))
+			currentReq.push(newUserRequest);
+		if (newLLMResponse && !currentRes.includes(newLLMResponse))
+			currentRes.push(newLLMResponse);
+
+		const newPrompt = {
 			userRequest: currentReq,
 			llmResponse: currentRes,
-		},
-		type: currentTask?.type,
-	});
+		};
+
+		switch (type) {
+			case 'JOB':
+				success = await setJob({
+					id: _id,
+					status: currTx?.status,
+					prompt: newPrompt,
+					type: currTx?.type,
+				});
+				break;
+			case 'TASK':
+			case 'TASK_DIRECT':
+				success = await setTask({
+					id: _id,
+					status: currTx?.status,
+					prompt: newPrompt,
+					type: currTx?.type,
+				});
+				break;
+			case 'EXECUTION':
+				success = await setExec({
+					id: _id,
+					status: currTx?.status,
+					prompt: newPrompt,
+					type: currTx?.type,
+				});
+				break;
+		}
+	} catch (e) {
+		logger.error(
+			`something went wrong in appendToTransactionLog: ${getError(e)}`,
+		);
+	}
+
+	return success;
 };
 
 export const execWrapper = async (func: _func, args: string[]) => {
@@ -183,7 +313,7 @@ const SafeExecute = async (
 				const error = keys.findIndex((k) => k === 'error');
 				const input = keys.findIndex((k) => k === 'input');
 
-				if (output > -1 && error > -1 && input > -1) {
+				if (output > -1 || error > -1 || input > -1) {
 					// map to vals
 					const _input = `${vals[input]}` as string;
 					const _output = `${vals[output]}` as string;
@@ -194,6 +324,8 @@ const SafeExecute = async (
 						_error ||
 						_input ||
 						'[*] no response from shell, assume exited successfully'; // placeholder failsafe
+
+					logger.warn(`validResult: ${validResult}`);
 				}
 			}
 
@@ -239,30 +371,25 @@ export const getError = (e: unknown) => {
 	return error;
 };
 
-const addJobToTask = async (task_id: string, job_id: string) => {
+const AddJob = async (id: string, job_id: string) => {
 	let saved = false;
 
-	const entry = await redisGet(task_id);
+	const entry = await getExec(id);
 	const related = entry?.related;
-
 	const jobs = related?.job ?? [];
-	const tasks = related?.task ?? [];
-	const execs = related?.exec ?? [];
 
 	// save job id in parent
 	jobs?.push(job_id);
 
 	switch (entry?.type) {
-		case TaskType.TASK:
-		case TaskType.TASK_DIRECT:
-			saved = await setTask({
-				id: task_id,
+		case TaskType.EXECUTION:
+			saved = await setExec({
+				id: id,
 				related: {
 					job: jobs,
-					task: tasks,
-					exec: execs,
 				},
 			});
+			break;
 		default:
 			logger.warn(`no case found for ${entry?.type} in addJobToTask..`);
 	}
@@ -270,7 +397,7 @@ const addJobToTask = async (task_id: string, job_id: string) => {
 	return saved;
 };
 
-const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
+const ExecProcessJob = async (exec_id: string, task: Tool_Output) => {
 	let pivotRequired = false;
 	let final_results: string = 'FAILED';
 	let jobs = new Map<string, string | undefined>();
@@ -279,27 +406,28 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 		const steps = task.identified_internal_tools_required;
 
 		for (const step of steps) {
+			const job_id = crypto.randomUUID();
+
 			try {
 				if (pivotRequired) throw new Error('pivotRequired in branching!');
 				else {
 					// save job_id
-					const job_id = crypto.randomUUID();
 					jobs.set(job_id, undefined);
 
 					await setJob({
 						id: job_id,
 						type: TaskType.JOB,
-						related: {
-							task: [task_id],
-						},
-						job: JSON.stringify(step),
 						status: {
 							status: Status.QUEUED,
 						},
+						related: {
+							exec: [exec_id],
+						},
+						job: JSON.stringify(step),
 					});
 
 					// add link to main task
-					await addJobToTask(task_id, job_id);
+					await AddJob(exec_id, job_id);
 
 					let tool: unknown = step['Tool'];
 
@@ -336,17 +464,40 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 						throw new Error(`no result came back from SafeExecute...`);
 
 					final_results = result;
+
+					await setJob({
+						id: job_id,
+						type: TaskType.JOB,
+						status: {
+							status: Status.COMPLETED,
+						},
+						job: JSON.stringify(step),
+						result: final_results,
+					});
 				}
 			} catch (e) {
 				logger.error(
-					`something went wrong in TaskProcessJob ${JSON.stringify(e)}`,
+					`something went wrong in TaskProcessJob step: ${JSON.stringify(getError(e))}`,
 				);
+
+				await setJob({
+					id: job_id,
+					type: TaskType.JOB,
+					status: {
+						status: Status.FAILED,
+					},
+					related: {
+						exec: [exec_id],
+					},
+					job: JSON.stringify(step),
+					result: final_results,
+				});
 				continue;
 			}
 		}
 	} catch (e) {
 		logger.error(
-			`something went wrong in TaskProcessJob: ${JSON.stringify(e)}`,
+			`something went wrong in TaskProcessJob: ${JSON.stringify(getError(e))}`,
 		);
 	}
 
@@ -356,16 +507,24 @@ const TaskProcessJob = async (task_id: string, task: Tool_Output) => {
 };
 
 export const ToolExec = async (
-	task_id: string,
+	tool_exec_id: string,
 	task: string,
 	initial_exec: string,
 ) => {
-	await setTask({
-		id: task_id,
+	await setExec({
+		id: tool_exec_id,
 		status: {
 			status: Status.RUNNING,
 			message: 'In Tool Exec',
 		},
+		type: 'EXECUTION',
+	});
+
+	await appendToTransactionLog({
+		_id: tool_exec_id,
+		type: TaskType.EXECUTION,
+		newUserRequest: task,
+		newLLMResponse: initial_exec,
 	});
 
 	let result: string = 'FAILED';
@@ -387,20 +546,27 @@ export const ToolExec = async (
 			throw new Error(`no steps found: ${steps}`);
 
 		// exec
-		result = await TaskProcessJob(task_id, json_response);
+		result = await ExecProcessJob(tool_exec_id, json_response);
 
-		await setTask({
-			id: task_id,
+		await setExec({
+			id: tool_exec_id,
 			result,
 			status: {
 				status: Status.COMPLETED,
 			},
 		});
+
+		await appendToTransactionLog({
+			_id: tool_exec_id,
+			type: TaskType.EXECUTION,
+			newLLMResponse: result,
+		});
+		
 	} catch (e) {
 		logger.error(`something went wrong in ToolExec: ${e}`);
 
-		await setTask({
-			id: task_id,
+		await setExec({
+			id: tool_exec_id,
 			status: {
 				status: Status.FAILED,
 				message: `${JSON.stringify(e)}`,

@@ -11,9 +11,7 @@ const LLM_MODEL = {
 	GRANITE_4: 'granite4.1:3b',
 };
 export type LLM_MODEL = (typeof LLM_MODEL)[keyof typeof LLM_MODEL];
-export type OLLAMA_RES = {
-	response: string;
-};
+export type OllamaResponse = { response: string };
 
 const OLLAMA_URL = _env.ollama_url;
 
@@ -45,7 +43,7 @@ export const call_LLM = async (
 			);
 		}
 
-		const _response = (await response.json()) as OLLAMA_RES;
+		const _response = (await response.json()) as OllamaResponse;
 
 		return _response.response;
 	} catch (e) {

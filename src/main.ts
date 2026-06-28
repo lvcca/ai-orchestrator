@@ -11,7 +11,7 @@ const logger = getLogger('main');
 app.listen(port, () => {
 	const msg =
 		`Found schemas: ${JSON.stringify(registry.listSchemas())}, ` +
-		`registered tools: ${JSON.stringify(registry.listTools())}\n.` +
+		`registered tools: ${JSON.stringify(registry.listTools())}.\n` +
 		`Server started on hostname:port: ${hostname()}:${port}, env: ${JSON.stringify(_env)}`;
 
 	logger.info(msg);

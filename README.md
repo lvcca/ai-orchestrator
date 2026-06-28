@@ -5,6 +5,8 @@
 
 a light ai-orchestrator written in typescript.
 
+![Demo](images/demo.gif)
+
 ## Installation
 
 ```bash
@@ -19,14 +21,14 @@ docker compose up --build --force-recreate;
 ## Usage
 
 ```typescript
-fetch("http://localhost:8080/task/newTask", {
+fetch("http://localhost:8080/exec/newExec", {
   method: "GET",
   headers: { 
     "Content-Type": "application/json", 
     "task": "Using only the FileSystemApi tools or system commands list the files in the current directory .", 
     "id": crypto.randomUUID()
   }
-})
+}).then(res => res.text()).then(console.log).catch(console.error)
 ```
 
 ```shell

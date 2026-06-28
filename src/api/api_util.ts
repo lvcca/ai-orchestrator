@@ -8,7 +8,14 @@ import {
 } from '../state/types.ts';
 import { getLogger } from '../logger/logger.ts';
 import { redisExists, redisGet, redisSet } from '../state/state.ts';
-import { getExec, setExec, setJob, setTask } from '../state/util.ts';
+import {
+	getExec,
+	getJob,
+	getTask,
+	setExec,
+	setJob,
+	setTask,
+} from '../state/util.ts';
 import crypto, { randomUUID } from 'node:crypto';
 import { call_llm_task_validator } from '../llm.ts';
 import {
@@ -33,7 +40,7 @@ export const getHeader = (req: Request, header: string) => {
 	else return _header;
 };
 
-export const taskInsert = async ({
+export const GeneralInsert = async ({
 	req,
 	type,
 	//
@@ -79,7 +86,7 @@ export const taskInsert = async ({
 	if (exists) currEntry = await redisGet(id);
 
 	// redis save obj
-	let tx: Transaction | undefined;
+	let transaction: Transaction | undefined;
 
 	// if exists create new task with link to existing task
 	if (exists) {
@@ -90,53 +97,52 @@ export const taskInsert = async ({
 		const llmResponse = prompt.llmResponse ?? [];
 		const userRequest = prompt.userRequest ?? [];
 
-		userRequest.push(task);
+		llmResponse?.push(task);
 
-		const newPrompt = {
+		const newPrompt: Prompt = {
 			userRequest,
 			llmResponse,
 		};
 
-		let related: Related = currEntry?.related;
+		let related: Related = structuredClone(currEntry?.related);
 
 		switch (currEntry?.type) {
 			case 'EXECUTION':
-				if (related && !related?.exec) related.exec = [] 
-				
+				if (related && !related?.exec) related.exec = [];
+
 				related?.exec?.push(id);
 				break;
 
 			case 'JOB':
-				if (related && !related.job) related.job = []
-				
+				if (related && !related.job) related.job = [];
+
 				related?.job?.push(id);
 				break;
 
 			case 'TASK':
 			case 'TASK_DIRECT':
-				if (related && !related.task) related.task = []
-				
+				if (related && !related.task) related.task = [];
+
 				related?.task?.push(id);
 				break;
 		}
 
-		tx = {
+		transaction = {
 			id: newId,
 			status: {
-				status: Status.QUEUED, 
+				status: Status.QUEUED,
 			},
-			type: type,
+			type,
 			prompt: newPrompt,
 			related,
 		};
 
 		// for return statement to be accurate
-		id = newId
+		id = newId;
 
-		logger.info(`sanity check: ${id === newId}`)
-
-	} else
-		tx = {
+		logger.info(`sanity check: ${id === newId}`);
+	} else {
+		transaction = {
 			id,
 			status: {
 				status: Status.QUEUED,
@@ -147,20 +153,22 @@ export const taskInsert = async ({
 				llmResponse: [],
 			},
 		};
+	}
 
-	logger.info(`full saved exists transaction: ${JSON.stringify(tx)}`)
+	logger.info(`full saved exists transaction: ${JSON.stringify(transaction)}`);
+
 	logger.info(`Incoming newTask: ${id}, type: ${type}`);
 
 	switch (type) {
 		case TaskType.EXECUTION:
-			successful = await setExec(tx);
+			successful = await setExec(transaction);
 			break;
 		case TaskType.JOB:
-			successful = await setJob(tx);
+			successful = await setJob(transaction);
 			break;
 		case TaskType.TASK_DIRECT:
 		case TaskType.TASK:
-			successful = await setTask(tx);
+			successful = await setTask(transaction);
 			break;
 	}
 
@@ -174,7 +182,7 @@ export const resolveRelated = async (related?: Related) => {
 	let execs: Transaction[] = [];
 	let jobs: Transaction[] = [];
 
-	const out = {
+	let out = {
 		tasks,
 		execs,
 		jobs,
@@ -186,20 +194,20 @@ export const resolveRelated = async (related?: Related) => {
 
 	if (task)
 		for (const t of task) {
-			const entry = await redisGet(t);
-			if (entry) tasks.push(entry);
+			const entry = await getTask(t);
+			if (entry && !tasks.includes(entry)) tasks.push(entry);
 		}
 
 	if (exec)
 		for (const e of exec) {
-			const entry = await redisGet(e);
-			if (entry) execs.push(entry);
+			const entry = await getExec(e);
+			if (entry && !execs.includes(entry)) execs.push(entry);
 		}
 
 	if (job)
 		for (const j of job) {
-			const entry = await redisGet(j);
-			if (entry) jobs.push(entry);
+			const entry = await getJob(j);
+			if (entry && !jobs.includes(entry)) jobs.push(entry);
 		}
 
 	return out;
@@ -318,56 +326,69 @@ const handleManagerNextAction = async (
 			break;
 		case 'retry':
 			const prompt = managerResponse.next_action.prompt;
-			// const newId = randomUUID();
-			return await newExec({
+
+			await newExec({
 				_id: exec_id,
 				_task: prompt,
 			});
+
+			success = true;
 	}
 
 	return success;
 };
 
 // @ts-ignore
-export const newExec = async ({ req, res, _id, _task,} : 
-	{
-		req?: Request;
-		res?: Response;
+export const newExec = async ({
+	req,
+	res,
+	_id,
+	_task,
+}: {
+	req?: Request;
+	res?: Response;
+	//
+	_id?: string;
+	_task?: string;
+}) => {
+	try {
 		//
-		_id?: string;
-		_task?: string;
-	} ) => {
-		try {
+		const exec_id = await GeneralInsert({
+			req,
+			type: TaskType.EXECUTION,
 			//
-			const exec_id = await taskInsert({
-				req,
-				type: TaskType.EXECUTION,
-				//
-				_id,
-				_task,
-			});
-			
-			const llm_response = await run(exec_id, TaskType.EXECUTION);
-			const validatorResponse = await validate(exec_id);
-			const currObj = await getExec(exec_id);
-			//
-			const summary = await summarize(exec_id);
-			//
-			const ManagerResponse = await ManageTransaction(exec_id);
-			//
-			if (ManagerResponse.next_action) {
-				return await handleManagerNextAction(exec_id, ManagerResponse);
-				// return res?.status(200).send(undefined);
-			} else
-				return res?.status(200).send({
-					llm_response,
-					validatorResponse,
-					currObj,
-					summary,
-					ManagerResponse,
-				});
-		} catch (e) {
-			logger.error(`something went wrong in newExec: ${e}`);
-			return res?.status(500).send(undefined);
-		}
+			_id,
+			_task,
+		});
+
+		const llm_response = await run(exec_id, TaskType.EXECUTION);
+		const validatorResponse = await validate(exec_id);
+		const currObj = await getExec(exec_id);
+		//
+		const summary = await summarize(exec_id);
+		//
+		const ManagerResponse = await ManageTransaction(exec_id);
+
+		if (
+			ManagerResponse.next_action &&
+			ManagerResponse?.transaction_status !== 'success'
+		)
+			return await handleManagerNextAction(exec_id, ManagerResponse);
+
+		const response = {
+			llm_response,
+			validatorResponse,
+			currObj,
+			summary,
+			ManagerResponse,
+		};
+
+		logger.debug(`responding to client: ${JSON.stringify(response)}`);
+
+		// else
+		return res?.status(200).send(response);
+	} catch (e) {
+		logger.error(`something went wrong in newExec: ${e}`);
+		return res?.status(500).send(undefined);
+	}
 };

@@ -1,7 +1,13 @@
 import { app } from '../server/server.ts';
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '../logger/logger.ts';
-import { getHeader, newExec, run, taskInsert, validate } from './api_util.ts';
+import {
+	getHeader,
+	newExec,
+	run,
+	GeneralInsert,
+	validate,
+} from './api_util.ts';
 import { TaskType } from '../state/types.ts';
 import { deleteExec, deleteJob, deleteTask, getExec } from '../state/util.ts';
 import { redisGet, redisGetAll } from '../state/state.ts';
@@ -49,14 +55,14 @@ app.get('/task/allTasks', async (_, res) => {
 });
 
 app.get('/task/newTaskDirect', async (req, res) => {
-	const task_id = await taskInsert({ req, type: TaskType.TASK_DIRECT });
+	const task_id = await GeneralInsert({ req, type: TaskType.TASK_DIRECT });
 	const llm_response = await run(task_id, TaskType.TASK_DIRECT);
 
 	return res.status(200).send(llm_response);
 });
 
 app.get('/task/newTask', async (req, res) => {
-	const task_id = await taskInsert({ req, type: TaskType.TASK });
+	const task_id = await GeneralInsert({ req, type: TaskType.TASK });
 	const llm_response = await run(task_id, TaskType.TASK_DIRECT);
 
 	return res.status(200).send(llm_response);
@@ -88,7 +94,7 @@ app.get('/exec/deleteExec', async (req, res) => {
 app.get('/job/');
 app.get('/job/allJobs');
 app.get('/job/newJob', async (req, res) => {
-	const successful = await taskInsert({ req, type: TaskType.JOB });
+	const successful = await GeneralInsert({ req, type: TaskType.JOB });
 	return res.status(200).send(successful);
 });
 app.get('/job/deleteJob', async (req, res) => {

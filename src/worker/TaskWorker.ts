@@ -1,8 +1,8 @@
 import { call_llm_chat, call_llm_tasks } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
-import { Status } from '../state/types.ts';
+import { Status, TaskType } from '../state/types.ts';
 import { setTask } from '../state/util.ts';
-import { parseJsonSafe, updateTaskPrompt } from './util.ts';
+import { parseJsonSafe, appendToTransactionLog } from './util.ts';
 
 const logger = getLogger('TaskWorker');
 
@@ -20,17 +20,30 @@ const revise_plan = async (
 	depth = 5,
 ) => {
 	// recursion exit
-	if (depth == 0)
+	if (depth == 0) {
+		await appendToTransactionLog({
+			_id: task_id,
+			type: TaskType.TASK,
+			newUserRequest: task,
+			newLLMResponse: plan,
+		});
+
 		return {
 			approved: false,
 			revise_plan: false,
 			steps: [plan],
 		} as TaskWorkerResultType;
+	}
 
 	logger.info(`current task: ${task}`);
 	logger.info(`current plan: ${plan}`);
 
-	await updateTaskPrompt(task_id, Status.RUNNING, task, plan);
+	await appendToTransactionLog({
+		_id: task_id,
+		type: TaskType.TASK,
+		newUserRequest: task,
+		newLLMResponse: plan,
+	});
 
 	const prompt = `You are a planning critic. You only have ${depth} number of attempts left to get this right.
 
@@ -57,12 +70,12 @@ ${JSON.stringify({
 })}
 
 If not acceptable return the following data-structure:
-${{
+${JSON.stringify({
 	approved: false,
 	steps: [], // <-- populated with real steps
 	revise_plan: true,
-	plan_feedback: [], //<-- populated with problems with previous steps
-}}
+	plan_feedback: [], // <-- populated with problems with previous steps
+})}
 `;
 
 	logger.info(`prompt: ${prompt}`);
@@ -97,13 +110,17 @@ export const RunTask = async (
 	task: string,
 	LLM_DIRECT: boolean,
 ) => {
+	logger.debug(`runTask`);
+
 	await setTask({
 		id: task_id,
 		status: { status: Status.RUNNING },
 	});
+
 	let final_output = '';
 	let plan = '';
 	let revised_plan = '';
+	let status: Status = Status.FAILED; // assume failed
 
 	try {
 		if (LLM_DIRECT) final_output = await call_llm_chat(`${task}`);
@@ -154,19 +171,30 @@ RULES:
 - Return only the completed result
 
 EXECUTION:
-                `);
+`);
 
-		await updateTaskPrompt(task_id, Status.COMPLETED, task, plan);
+		await appendToTransactionLog({
+			_id: task_id,
+			type: LLM_DIRECT ? TaskType.TASK_DIRECT : TaskType.TASK,
+			newUserRequest: task,
+			newLLMResponse: plan,
+		});
+
+		status = Status.COMPLETED;
 	} catch (e) {
-		logger.error(`something went wrong in TaskWorker:run_agents: ${e}`);
-		await updateTaskPrompt(task_id, Status.FAILED, task, plan);
+		logger.error(`something went wrong in TaskWorker:RunTask: ${e}`);
+
+		await appendToTransactionLog({
+			_id: task_id,
+			type: LLM_DIRECT ? TaskType.TASK_DIRECT : TaskType.TASK,
+			newUserRequest: task,
+			newLLMResponse: plan,
+		});
 	}
 
 	await setTask({
 		id: task_id,
-		status: {
-			status: Status.COMPLETED,
-		},
+		status: { status },
 		result: final_output,
 	});
 
