@@ -5,7 +5,7 @@
 
 a light ai-orchestrator written in typescript.
 
-![Demo](images/demo.gif)
+![Demo](demo.gif)
 
 ## Installation
 
