@@ -41,7 +41,7 @@ export const redisSet = async (tx: Transaction) => {
 
 			_new_entry = {
 				..._existing_entry,
-				..._new_entry,
+				..._new_entry, // allow new entry to overwrite values
 			};
 		}
 

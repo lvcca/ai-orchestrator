@@ -2,7 +2,7 @@ import { call_llm_task_transaction_manager } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
 import { redisGet } from '../state/state.ts';
 import { isValidUUID } from '../util/InputValidation.ts';
-import { parseJsonSafe, summarize } from '../worker/util.ts';
+import { parseJsonSafe, SummarizeTask } from '../worker/util.ts';
 
 const logger = getLogger('TransactionManager');
 
@@ -36,7 +36,7 @@ export const ManageTransaction = async (id: string) => {
 
 	logger.info(`execution_id: ${id}`);
 
-	const summary = await summarize(id);
+	const summary = await SummarizeTask(id);
 
 	let final_results: TransactionManagerResponse = {};
 

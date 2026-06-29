@@ -5,16 +5,14 @@ import { setTask } from '../state/util.ts';
 import { GetPlan, PlannerWorkerResultType, RevisePlan } from './Planner.ts';
 import { appendToTransactionLog } from './util.ts';
 
-const logger = getLogger('TaskWorker');
+const logger = getLogger('ShellWorker');
 
 export const RunTask = async (
 	task_id: string,
 	task: string,
 	LLM_DIRECT: boolean,
 ) => {
-	logger.info(
-		`RunTask: task_id: ${task_id}, task: ${task}, LLM_DIRECT: ${LLM_DIRECT}`,
-	);
+	logger.debug(`runTask`);
 
 	await setTask({
 		id: task_id,
@@ -40,7 +38,7 @@ export const RunTask = async (
 		revised_plan = result.steps.join();
 
 		final_output = await call_llm_tasks(`
-You are an execution agent.
+You are a shell runner.
 
 Your job is to complete the requested task using the provided plan.
 
@@ -55,8 +53,6 @@ RULES:
 - Be concise
 - Do not explain your reasoning unless necessary
 - Return only the completed result
-
-EXECUTION:
 `);
 
 		await appendToTransactionLog({

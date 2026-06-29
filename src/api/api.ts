@@ -1,18 +1,10 @@
 import { app } from '../server/server.ts';
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '../logger/logger.ts';
-import {
-	getHeader,
-	newExec,
-	run,
-	GeneralInsert,
-	validate,
-} from './api_util.ts';
+import { getHeader, newExec, run, GeneralInsert } from './api_util.ts';
 import { TaskType } from '../state/types.ts';
 import { deleteExec, deleteJob, deleteTask, getExec } from '../state/util.ts';
 import { redisGet, redisGetAll } from '../state/state.ts';
-import { parseJsonSafe, summarize } from '../worker/util.ts';
-import { ManageTransaction } from '../service/TransactionManager.ts';
 import { isValidUUID } from '../util/InputValidation.ts';
 
 const logger = getLogger('api');

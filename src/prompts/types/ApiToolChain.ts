@@ -1,6 +1,6 @@
 type UUID = string & { __brand: 'uuid' };
 
-export type Tool_Output = {
+export type ToolCallPayload = {
 	taskid: UUID;
 	identified_internal_tools_required: ToolEntry[];
 	completed_task: boolean;

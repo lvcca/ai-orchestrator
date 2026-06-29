@@ -7,7 +7,11 @@ import {
 	PROMPTS,
 } from '../llm.ts';
 import { getLogger } from '../logger/logger.ts';
-import { Parameter, Tool, Tool_Output } from '../prompts/types/ApiToolChain.ts';
+import {
+	Parameter,
+	Tool,
+	ToolCallPayload,
+} from '../prompts/types/ApiToolChain.ts';
 import { StandardStreams } from '../prompts/types/ShellExecutor.ts';
 import { redisGet } from '../state/state.ts';
 import { Related, Status, TaskType, Transaction } from '../state/types.ts';
@@ -25,40 +29,13 @@ import crypto from 'node:crypto';
 
 const logger = getLogger('worker_util');
 
-export const parseJsonSafe = async <T>(
-	text: string,
-	retries?: number,
-): Promise<T> => {
+export const parseJsonSafe = async <T>(text: string): Promise<T> => {
 	logger.debug(`parseJsonSafe text: ${text}`);
 
 	try {
 		return JSON.parse(text) as T;
-	} catch {
-		//
-		// throw new Error(`invalid json: ${text}`);
-		//
-
-		// 1. Create a dummy type that resolves your generic
-		type Expanded<T> = { [K in keyof T]: T[K] };
-
-		// 2. Wrap your generic type
-		type MyExpandedType = Expanded<T>;
-
-		// 3. Hover over 'MyExpandedType' in VS Code, or assign it to a
-		// string to see the expanded type structure in the error tooltip:
-		const debug = {} as MyExpandedType;
-
-		logger.info(
-			`debug expanded parseJsonSafeText Type ${JSON.stringify(debug)}`,
-		);
-
-		const reformed = await call_LLM(`
-			You are a JSON repair tool manager. Your sole responsibility is to fix invalid json objects.
-
-			${Object.keys(debug)}
-
-		`);
-		throw new Error(`could not fix invalid json object: ${text}`);
+	} catch (e) {
+		throw new Error(`invalid json: ${text}, error: ${getError(e)}`);
 	}
 };
 
@@ -330,6 +307,7 @@ const SafeExecute = async (
 			}
 
 			default:
+				validResult = `${result}`;
 				logger.warn(
 					`no case found for result ${JSON.stringify(result)}, result type: ${typeof result}`,
 				);
@@ -384,8 +362,9 @@ const AddJob = async (id: string, job_id: string) => {
 	switch (entry?.type) {
 		case TaskType.EXECUTION:
 			saved = await setExec({
-				id: id,
+				...entry,
 				related: {
+					...related,
 					job: jobs,
 				},
 			});
@@ -397,23 +376,37 @@ const AddJob = async (id: string, job_id: string) => {
 	return saved;
 };
 
-const ExecProcessJob = async (exec_id: string, task: Tool_Output) => {
+/**
+ *
+ * @param exec_id transaction id
+ * @param {ToolCallPayload} toolPayload llm generated tool payload in json form
+ * @returns
+ */
+
+const ExecProcessJob = async (
+	exec_id: string,
+	toolPayload: ToolCallPayload,
+) => {
 	let pivotRequired = false;
 	let final_results: string = 'FAILED';
 	let jobs = new Map<string, string | undefined>();
 
 	try {
-		const steps = task.identified_internal_tools_required;
+		const requiredToolSteps = toolPayload.identified_internal_tools_required; // in order of execution llm decided
 
-		for (const step of steps) {
+		for (const step of requiredToolSteps) {
+			// make new transaction for each step
 			const job_id = crypto.randomUUID();
 
 			try {
+				// prevent unnessary executions if pivot identified
 				if (pivotRequired) throw new Error('pivotRequired in branching!');
+				// insert entry for job
 				else {
-					// save job_id
+					// local tracker
 					jobs.set(job_id, undefined);
 
+					// redis entry
 					await setJob({
 						id: job_id,
 						type: TaskType.JOB,
@@ -429,36 +422,38 @@ const ExecProcessJob = async (exec_id: string, task: Tool_Output) => {
 					// add link to main task
 					await AddJob(exec_id, job_id);
 
-					let tool: unknown = step['Tool'];
+					// always be type safe with llm generated stuffs
+					let safeToolName: unknown = step['Tool'];
 
 					// try parse as tool first
-					if (typeof tool !== 'string') {
-						let _tool = tool as Tool;
+					if (typeof safeToolName !== 'string') {
+						let _tool = safeToolName as Tool;
 
-						let test: Tool = {
+						let SafeToolObject: Tool = {
 							name: _tool['name'] ?? '',
 							description: _tool['description'] ?? '',
 							parameters: _tool['parameters'] ?? [],
 							return: _tool['return'],
 						};
 
-						tool = test.name;
+						safeToolName = SafeToolObject.name;
 					}
 
 					const params = step.Params ?? [];
 
 					logger.info(
-						`identified tool: ${JSON.stringify(tool)}, params: ${JSON.stringify(params)}`,
+						`identified tool: ${JSON.stringify(safeToolName)}, params: ${JSON.stringify(params)}`,
 					);
 
-					const found_tool: ToolEntry | undefined = registry.get(
-						tool as string,
+					const foundToolEntry: ToolEntry | undefined = registry.get(
+						safeToolName as string,
 					);
+					if (!foundToolEntry)
+						throw new Error(
+							`could not find tool ${JSON.stringify(safeToolName)}`,
+						);
 
-					if (!found_tool)
-						throw new Error(`could not find tool ${JSON.stringify(tool)}`);
-
-					const result = await SafeExecute(job_id, found_tool, params);
+					const result = await SafeExecute(job_id, foundToolEntry, params);
 
 					if (!result)
 						throw new Error(`no result came back from SafeExecute...`);
@@ -506,13 +501,21 @@ const ExecProcessJob = async (exec_id: string, task: Tool_Output) => {
 	return final_results;
 };
 
+/**
+ *
+ * @param toolExecId id for tool exec transaction
+ * @param task task attempting to be accomplished
+ * @param toolExecPayload
+ * @returns {Promise<string>}
+ */
+
 export const ToolExec = async (
-	tool_exec_id: string,
+	toolExecId: string,
 	task: string,
-	initial_exec: string,
+	toolExecPayload: string,
 ) => {
 	await setExec({
-		id: tool_exec_id,
+		id: toolExecId,
 		status: {
 			status: Status.RUNNING,
 			message: 'In Tool Exec',
@@ -521,17 +524,17 @@ export const ToolExec = async (
 	});
 
 	await appendToTransactionLog({
-		_id: tool_exec_id,
+		_id: toolExecId,
 		type: TaskType.EXECUTION,
 		newUserRequest: task,
-		newLLMResponse: initial_exec,
+		newLLMResponse: toolExecPayload,
 	});
 
 	let result: string = 'FAILED';
 
 	try {
 		const narrowed = await call_llm_data_narrower(
-			`sanitize the following output: ${initial_exec}`,
+			`sanitize the following output: ${toolExecPayload}`,
 		);
 
 		const block = await extractResponseBlock(narrowed);
@@ -539,17 +542,17 @@ export const ToolExec = async (
 		if (!block)
 			throw new Error(`no block found from narrowed response, block: ${block}`);
 
-		const json_response = await parseJsonSafe<Tool_Output>(block);
+		const json_response = await parseJsonSafe<ToolCallPayload>(block);
 		const steps = json_response.identified_internal_tools_required;
 
 		if (!steps || (Array.isArray(steps) && steps.length < 1))
 			throw new Error(`no steps found: ${steps}`);
 
 		// exec
-		result = await ExecProcessJob(tool_exec_id, json_response);
+		result = await ExecProcessJob(toolExecId, json_response);
 
 		await setExec({
-			id: tool_exec_id,
+			id: toolExecId,
 			result,
 			status: {
 				status: Status.COMPLETED,
@@ -557,28 +560,26 @@ export const ToolExec = async (
 		});
 
 		await appendToTransactionLog({
-			_id: tool_exec_id,
+			_id: toolExecId,
 			type: TaskType.EXECUTION,
 			newLLMResponse: result,
 		});
-		
 	} catch (e) {
 		logger.error(`something went wrong in ToolExec: ${e}`);
 
 		await setExec({
-			id: tool_exec_id,
+			id: toolExecId,
 			status: {
 				status: Status.FAILED,
 				message: `${JSON.stringify(e)}`,
 			},
 		});
 	}
-
 	return result;
 };
 
-const SimplifyOpinion = async (next_step: string) => {
-	const final_result = await call_llm_shell_branch_simplifier(`
+const SimplifyOpinion = async (next_step: string) =>
+	await call_llm_shell_branch_simplifier(`
 You are a quality assurance expert. 
 
 Input:
@@ -589,8 +590,6 @@ Expected Output Format:
     ShellBranchAnalysisSimplified
 </LLM_RESPONSE>
 `);
-	return final_result;
-};
 
 const FormatStringArray = (results: string[]) => {
 	let res = ``;
@@ -605,8 +604,8 @@ const GetSecondOpinion = async (
 	job_results: string[],
 	job_ids: string[],
 	task_id: string,
-) => {
-	const final_result = await call_llm_shell_branch_analyzer(`
+) =>
+	await call_llm_shell_branch_analyzer(`
 You are a quality assurance expert.
 
 Your sole purpose is to evaluate the analysis of a job 
@@ -650,15 +649,13 @@ Expected Output Format:
     ShellBranchAnalysis
 </LLM_RESPONSE>
 `);
-	return final_result;
-};
 
 const AnalyzeShellResults = async (
 	job_results: string[],
 	job_ids: string[],
 	task_id: string,
 ) => {
-	const final_results = await call_llm_shell_branch_analyzer(`
+	const finalResults = await call_llm_shell_branch_analyzer(`
 You are a System Execution Branch Analysis agent.
 
 Your sole responsibility is to evaluate whether the current execution branch remains viable for accomplishing the task goal.
@@ -721,10 +718,10 @@ Expected Output Format:
     ShellBranchAnalysis
 </LLM_RESPONSE>`);
 
-	return final_results;
+	return finalResults;
 };
 
-export type summaryType = {
+export type SummaryType = {
 	status: 'success' | 'failure' | 'partial_success' | 'unknown';
 	summary: string;
 	result: string;
@@ -733,11 +730,11 @@ export type summaryType = {
 	artifacts: string[];
 };
 
-export const summarize = async (id: string) => {
+export const SummarizeTask = async (id: string) => {
 	const currObj = await redisGet(id);
 	const _obj = JSON.stringify(currObj);
 
-	const summarizer = await call_llm_task_summarizer(`
+	const summarizedTask = await call_llm_task_summarizer(`
 You are an ai task result summarizer.
 
 Your job is to parse results and determine a definitive next step is required.
@@ -770,8 +767,8 @@ OUTPUT FORMAT:
 }
 </LLM_RESPONSE>
 `);
-	const summary = await parseJsonSafe<summaryType>(
-		await extractResponseBlock(summarizer),
+	const summary = await parseJsonSafe<SummaryType>(
+		await extractResponseBlock(summarizedTask),
 	);
 	return summary;
 };

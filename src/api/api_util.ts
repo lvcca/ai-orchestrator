@@ -21,7 +21,7 @@ import { call_llm_task_validator } from '../llm.ts';
 import {
 	extractResponseBlock,
 	parseJsonSafe,
-	summarize,
+	SummarizeTask,
 } from '../worker/util.ts';
 import { ValidatorResponse } from '../prompts/types/TaskValidator.ts';
 import { RunTask } from '../worker/TaskWorker.ts';
@@ -313,7 +313,6 @@ export const run = async (id: string, type: TaskType) => {
 	return result;
 };
 
-// @ts-ignore
 const handleManagerNextAction = async (
 	exec_id: string,
 	managerResponse: TransactionManagerResponse,
@@ -338,7 +337,6 @@ const handleManagerNextAction = async (
 	return success;
 };
 
-// @ts-ignore
 export const newExec = async ({
 	req,
 	res,
@@ -365,7 +363,7 @@ export const newExec = async ({
 		const validatorResponse = await validate(exec_id);
 		const currObj = await getExec(exec_id);
 		//
-		const summary = await summarize(exec_id);
+		const summary = await SummarizeTask(exec_id);
 		//
 		const ManagerResponse = await ManageTransaction(exec_id);
 
