@@ -250,7 +250,6 @@ const SafeExecute = async (
 	});
 
 	try {
-
 		const func = tool.func;
 		const params = Params.map((p) => p.value);
 
@@ -399,9 +398,9 @@ const ExecProcessJob = async (
 				if (pivotRequired) throw new Error('pivotRequired in branching!');
 
 				/**
-				 * insert entry for job 
-				*/
-				
+				 * insert entry for job
+				 */
+
 				// local tracker
 				jobs.set(job_id, undefined);
 
@@ -455,8 +454,7 @@ const ExecProcessJob = async (
 
 				const result = await SafeExecute(job_id, foundToolEntry, params);
 
-				if (!result)
-					throw new Error(`no result came back from SafeExecute...`);
+				if (!result) throw new Error(`no result came back from SafeExecute...`);
 
 				final_results = result;
 
@@ -469,7 +467,6 @@ const ExecProcessJob = async (
 					job: JSON.stringify(step),
 					result: final_results,
 				});
-				
 			} catch (e) {
 				logger.error(
 					`something went wrong in TaskProcessJob step: ${JSON.stringify(getError(e))}`,
@@ -514,8 +511,7 @@ export const ToolExec = async (
 	task: string,
 	toolExecPayload: string,
 ) => {
-
-	logger.debug(`ToolExec`)
+	logger.debug(`ToolExec`);
 
 	await setExec({
 		id: toolExecId,
@@ -549,7 +545,11 @@ export const ToolExec = async (
 		const steps = json_response.identified_internal_tools_required;
 
 		// ensure valid array
-		if (!Array.isArray(steps) || !steps || (Array.isArray(steps) && steps.length < 1))
+		if (
+			!Array.isArray(steps) ||
+			!steps ||
+			(Array.isArray(steps) && steps.length < 1)
+		)
 			throw new Error(`no steps found: ${steps}`);
 
 		// exec

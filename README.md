@@ -38,6 +38,18 @@ curl -X GET "http://localhost:8080/exec/newExec" \
   -H "id: 550e8400-e29b-41d4-a716-446655440000" 
 ```
 
+```powershell
+$url = "http://localhost:8080/exec/newExec"
+$headers = @{
+    "Content-Type" = "application/json"
+    "task" = "Using only the FileSystemApi tools or system commands list the files in the current directory ."
+    "id" = (New-Guid).Guid.ToString()
+}
+$response = Invoke-WebRequest -Method Get -Uri $url -Headers $headers
+$output = $response.Content | ConvertFrom-Json
+Write-Output $output
+```
+
 ### Output
 
 ```shell

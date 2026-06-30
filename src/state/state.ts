@@ -39,9 +39,10 @@ export const redisSet = async (tx: Transaction) => {
 		if (await redisExists(tx.id)) {
 			const _existing_entry = await redisGet(tx.id);
 
+			// allow _new_entry overwrite _existing_entry
 			_new_entry = {
 				..._existing_entry,
-				..._new_entry, // allow new entry to overwrite values
+				..._new_entry,
 			};
 		}
 
