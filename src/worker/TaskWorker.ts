@@ -31,13 +31,13 @@ export const RunTask = async (
 
 		plan = await GetPlan(task);
 
-		const result: PlannerWorkerResultType = await RevisePlan(
+		const RevisePlanResult: PlannerWorkerResultType = await RevisePlan(
 			task_id,
 			task,
 			plan,
 		);
 
-		revised_plan = result.steps.join();
+		revised_plan = RevisePlanResult.steps.join();
 
 		final_output = await call_llm_tasks(`
 You are an execution agent.

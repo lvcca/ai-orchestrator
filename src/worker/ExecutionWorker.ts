@@ -55,10 +55,10 @@ export const RunExec = async (
 
 	related = currObj?.related;
 
-	let final_output: string = 'FAILED';
+	let finalOutput: string = 'FAILED';
 
 	try {
-		if (LLM_DIRECT) final_output = await call_llm_chat(`${task}`);
+		if (LLM_DIRECT) finalOutput = await call_llm_chat(`${task}`);
 
 		let ToolExecPayload = await GetToolExecPayload(task, related);
 
@@ -74,18 +74,18 @@ export const RunExec = async (
 
 		// execution result
 		if (typeof toolOutput === 'string') {
-			final_output = toolOutput;
+			finalOutput = toolOutput;
 
 			await setExec({
 				id: exec_id,
 				status: { status: Status.COMPLETED },
-				result: final_output,
+				result: finalOutput,
 			});
 
 			await appendToTransactionLog({
 				_id: exec_id,
 				type: TaskType.EXECUTION,
-				newLLMResponse: final_output,
+				newLLMResponse: finalOutput,
 			});
 		}
 		// we shouldn't hit this, just safety
@@ -103,5 +103,5 @@ export const RunExec = async (
 		});
 	}
 
-	return final_output;
+	return finalOutput;
 };

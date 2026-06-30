@@ -250,10 +250,6 @@ const SafeExecute = async (
 	});
 
 	try {
-		await setJob({
-			id: key,
-			status: { status: Status.RUNNING, message: 'Preparing to execute' },
-		});
 
 		const func = tool.func;
 		const params = Params.map((p) => p.value);
@@ -401,75 +397,79 @@ const ExecProcessJob = async (
 			try {
 				// prevent unnessary executions if pivot identified
 				if (pivotRequired) throw new Error('pivotRequired in branching!');
-				// insert entry for job
-				else {
-					// local tracker
-					jobs.set(job_id, undefined);
 
-					// redis entry
-					await setJob({
-						id: job_id,
-						type: TaskType.JOB,
-						status: {
-							status: Status.QUEUED,
-						},
-						related: {
-							exec: [exec_id],
-						},
-						job: JSON.stringify(step),
-					});
+				/**
+				 * insert entry for job 
+				*/
+				
+				// local tracker
+				jobs.set(job_id, undefined);
 
-					// add link to main task
-					await AddJob(exec_id, job_id);
+				// redis entry
+				await setJob({
+					id: job_id,
+					type: TaskType.JOB,
+					status: {
+						status: Status.QUEUED,
+					},
+					related: {
+						exec: [exec_id],
+					},
+					job: JSON.stringify(step),
+				});
 
-					// always be type safe with llm generated stuffs
-					let safeToolName: unknown = step['Tool'];
+				// add link to main task
+				await AddJob(exec_id, job_id);
 
-					// try parse as tool first
-					if (typeof safeToolName !== 'string') {
-						let _tool = safeToolName as Tool;
+				// always be type safe with llm generated stuffs
+				let safeToolName: unknown = step['Tool'];
 
-						let SafeToolObject: Tool = {
-							name: _tool['name'] ?? '',
-							description: _tool['description'] ?? '',
-							parameters: _tool['parameters'] ?? [],
-							return: _tool['return'],
-						};
+				// try parse as tool first
+				if (typeof safeToolName !== 'string') {
+					let _tool = safeToolName as Tool;
 
-						safeToolName = SafeToolObject.name;
-					}
+					let SafeToolObject: Tool = {
+						name: _tool['name'] ?? '',
+						description: _tool['description'] ?? '',
+						parameters: _tool['parameters'] ?? [],
+						return: _tool['return'],
+					};
 
-					const params = step.Params ?? [];
-
-					logger.info(
-						`identified tool: ${JSON.stringify(safeToolName)}, params: ${JSON.stringify(params)}`,
-					);
-
-					const foundToolEntry: ToolEntry | undefined = registry.get(
-						safeToolName as string,
-					);
-					if (!foundToolEntry)
-						throw new Error(
-							`could not find tool ${JSON.stringify(safeToolName)}`,
-						);
-
-					const result = await SafeExecute(job_id, foundToolEntry, params);
-
-					if (!result)
-						throw new Error(`no result came back from SafeExecute...`);
-
-					final_results = result;
-
-					await setJob({
-						id: job_id,
-						type: TaskType.JOB,
-						status: {
-							status: Status.COMPLETED,
-						},
-						job: JSON.stringify(step),
-						result: final_results,
-					});
+					safeToolName = SafeToolObject.name;
 				}
+
+				const params = step.Params ?? [];
+
+				logger.info(
+					`identified tool: ${JSON.stringify(safeToolName)}, params: ${JSON.stringify(params)}`,
+				);
+
+				const foundToolEntry: ToolEntry | undefined = registry.get(
+					safeToolName as string,
+				);
+
+				if (!foundToolEntry)
+					throw new Error(
+						`could not find tool ${JSON.stringify(safeToolName)}`,
+					);
+
+				const result = await SafeExecute(job_id, foundToolEntry, params);
+
+				if (!result)
+					throw new Error(`no result came back from SafeExecute...`);
+
+				final_results = result;
+
+				await setJob({
+					id: job_id,
+					type: TaskType.JOB,
+					status: {
+						status: Status.COMPLETED,
+					},
+					job: JSON.stringify(step),
+					result: final_results,
+				});
+				
 			} catch (e) {
 				logger.error(
 					`something went wrong in TaskProcessJob step: ${JSON.stringify(getError(e))}`,
@@ -505,7 +505,7 @@ const ExecProcessJob = async (
  *
  * @param toolExecId id for tool exec transaction
  * @param task task attempting to be accomplished
- * @param toolExecPayload
+ * @param toolExecPayload stringified tool exec payload
  * @returns {Promise<string>}
  */
 
@@ -514,11 +514,14 @@ export const ToolExec = async (
 	task: string,
 	toolExecPayload: string,
 ) => {
+
+	logger.debug(`ToolExec`)
+
 	await setExec({
 		id: toolExecId,
 		status: {
 			status: Status.RUNNING,
-			message: 'In Tool Exec',
+			message: 'Tool Exec',
 		},
 		type: 'EXECUTION',
 	});
@@ -545,7 +548,8 @@ export const ToolExec = async (
 		const json_response = await parseJsonSafe<ToolCallPayload>(block);
 		const steps = json_response.identified_internal_tools_required;
 
-		if (!steps || (Array.isArray(steps) && steps.length < 1))
+		// ensure valid array
+		if (!Array.isArray(steps) || !steps || (Array.isArray(steps) && steps.length < 1))
 			throw new Error(`no steps found: ${steps}`);
 
 		// exec
